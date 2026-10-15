@@ -191,6 +191,12 @@ details.frow[open] summary{margin-bottom:4px}
   <p class="note">Dnevnik signalov, shranjen v tej napravi. Namen: preveriti, ali signali dejansko delujejo.</p>
   <div class="card" id="sigbox" style="overflow-x:auto"></div>
   <div class="row" style="margin-top:8px"><button class="ghost small" id="sigcheck">Preveri izide</button><button class="ghost small" id="sigclear">Počisti zgodovino</button></div>
+  <div class="row" style="margin-top:8px"><button class="ghost small" id="sigexp">Izvozi</button><button class="ghost small" id="sigimp">Uvozi</button></div>
+  <div class="card" id="iobox" hidden style="padding:12px;margin-top:8px">
+    <textarea id="iotext" rows="6" spellcheck="false" autocapitalize="off" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px;font:12px/1.4 monospace"></textarea>
+    <div class="row" style="margin-top:8px"><button class="small" id="iocopy">Kopiraj</button><button class="small" id="iodo" hidden>Uvozi</button><button class="ghost small" id="ioclose">Zapri</button></div>
+    <div class="stat" id="iomsg" style="margin-top:6px"></div>
+  </div>
   <p class="stat">Signal se zabeleži, ko kovanec v 15-min ali 1-urnem oknu izpolni oba pogoja (rast volumna in sprememba OI), največ enkrat na uro. Izid je sprememba futures cene po 15 min, 1 h in 3 h. Brez provizij in zdrsa, vzorec je majhen, zato ni dokaz.</p>
 
   <h2>Preveri žeton<span class="info" role="button" tabindex="0" data-info="sec_check" aria-label="Razlaga">ⓘ</span></h2>
@@ -1889,6 +1895,68 @@ $("oimin").addEventListener("change", function(){
   settings.oiMin = (v && v > 0) ? v : 2; this.value = settings.oiMin; saveSettings(); scanFut();
 });
 $("sigcheck").addEventListener("click", async function(){ try { await resolveSigs(); } catch (e) {} renderSigs(); });
+function ioShow(mode){
+  var ta = $("iotext");
+  $("iobox").hidden = false;
+  $("iomsg").textContent = "";
+  if (mode === "exp") {
+    var sg = loadSigs(), wt = loadWatch();
+    ta.value = JSON.stringify({v: 1, sig: sg, watch: wt});
+    ta.readOnly = true;
+    $("iocopy").hidden = false; $("iodo").hidden = true;
+    $("iomsg").textContent = "Izvoženo: " + sigWord(sg.length) + " in " + wt.length + " v seznamu. Tapni Kopiraj in besedilo shrani (npr. v zapiske).";
+  } else {
+    ta.value = "";
+    ta.readOnly = false;
+    ta.placeholder = "Sem prilepi prej izvožene podatke";
+    $("iocopy").hidden = true; $("iodo").hidden = false;
+  }
+}
+function ioCopy(){
+  var ta = $("iotext");
+  ta.focus(); ta.select();
+  var done = function(){ $("iomsg").textContent = "Kopirano."; };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(ta.value).then(done, function(){
+      try { document.execCommand("copy"); done(); } catch (e) { $("iomsg").textContent = "Kopiranje ni uspelo. Besedilo označi in kopiraj ročno."; }
+    });
+  } else {
+    try { document.execCommand("copy"); done(); } catch (e) { $("iomsg").textContent = "Kopiranje ni uspelo. Besedilo označi in kopiraj ročno."; }
+  }
+}
+function ioImport(){
+  try {
+    var o = JSON.parse($("iotext").value.trim());
+    if (!o || typeof o !== "object") throw new Error("x");
+    var inS = Array.isArray(o.sig) ? o.sig : [], inW = Array.isArray(o.watch) ? o.watch : [];
+    var cur = loadSigs(), ids = {}, addS = 0, addW = 0;
+    cur.forEach(function(s){ ids[s.id] = 1; });
+    inS.forEach(function(s){
+      if (!s || !s.id || !s.sym || !isFinite(s.t) || !isFinite(s.p0) || !TFL[s.per] || !STATE_NAMES[s.st] || ids[s.id]) return;
+      if (!s.o || typeof s.o !== "object") s.o = {"15m": null, "1h": null, "3h": null};
+      s.label = s.label || s.sym;
+      cur.push(s); ids[s.id] = 1; addS++;
+    });
+    cur.sort(function(a, b){ return a.t - b.t; });
+    saveSigs(cur);
+    var w = loadWatch();
+    inW.forEach(function(x){
+      if (!x || !validAddr(String(x.addr || ""))) return;
+      if (w.some(function(i){ return i.addr.toLowerCase() === String(x.addr).toLowerCase(); })) return;
+      w.push({addr: String(x.addr), sym: String(x.sym || "")}); addW++;
+    });
+    saveWatch(w);
+    renderSigs(); renderWatch();
+    $("iomsg").textContent = "Dodano: " + sigWord(addS) + " in " + addW + " v seznam. Obstoječi zapisi so ostali. Največ 300 signalov se hrani.";
+  } catch (e) {
+    $("iomsg").textContent = "Neveljavni podatki. Prilepi celotno izvoženo besedilo.";
+  }
+}
+$("sigexp").addEventListener("click", function(){ ioShow("exp"); });
+$("sigimp").addEventListener("click", function(){ ioShow("imp"); });
+$("iocopy").addEventListener("click", ioCopy);
+$("iodo").addEventListener("click", ioImport);
+$("ioclose").addEventListener("click", function(){ $("iobox").hidden = true; });
 $("sigclear").addEventListener("click", function(){
   if (typeof confirm === "function" && !confirm("Počistim vse zabeležene signale?")) return;
   saveSigs([]); renderSigs();
