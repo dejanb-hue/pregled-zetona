@@ -235,7 +235,7 @@ var CHAINS = {
 
 var $ = function(id){return document.getElementById(id);};
 var lastAddr = "";
-var runCounter = 0, curPair = null, curChain = "", candleCache = {};
+var runCounter = 0, curPair = null, curPool = "", curChain = "", candleCache = {};
 
 function esc(s){
   return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
@@ -296,7 +296,7 @@ var INFO = {
   buys_sells: ["Nakupi : prodaje (24 h)", "Število nakupnih in prodajnih transakcij v 24 h (seštevek vseh parov). Prodaje bistveno nad nakupi lahko pomenijo izstopanje. Število transakcij ni obseg v dolarjih."],
   age: ["Starost para", "Čas od nastanka glavnega para. Mlajši par = višje tveganje (manj zgodovine, lažje manipulacije). Pod 1 dnem rdeče, pod 14 dnevi rumeno."],
   chg24: ["Sprememba cene", "Sprememba cene v 24 h (in 1 h) z glavnega para. Po rasti čez 100 % je večji del premika običajno že mimo. Rumeno nad 40 %, rdeče nad 100 %."],
-  src_diff: ["Razhajanje virov", "DEXScreener in GeckoTerminal se pri skupni likvidnosti razlikujeta za več kot 3x. Pogost razlog: eden od virov ne vidi največjega bazena (npr. Uniswap V4). V tem primeru aplikacija uporabi večjo vrednost, a to je ocena. Preveri tudi na Binance Web3 ali DexTools."],
+  src_diff: ["Razhajanje virov", "DEXScreener in GeckoTerminal se pri skupni likvidnosti razlikujeta za več kot 3x. Pogost razlog: eden od virov ne vidi največjega bazena (npr. PancakeSwap Infinity ali Uniswap V4). V tem primeru aplikacija uporabi večjo vrednost, a to je ocena. Preveri tudi na Binance Web3 ali DexTools."],
   pairs_n: ["Število parov", "Koliko DEX parov ima ta žeton. Skupna likvidnost je seštevek čez vse pare."],
 
   honeypot: ["Honeypot", "Honeypot je žeton, ki ga lahko kupiš, a ne prodaš. GoPlus ga zazna s simulacijo prodaje. »DA« je rdeča zastavica: ne kupuj."],
@@ -408,6 +408,25 @@ async function fetchGT(chainKey, addr){
   return {liq: pf(a.total_reserve_in_usd), mc: pf(a.market_cap_usd), fdv: pf(a.fdv_usd), vol: v ? pf(v.h24) : null};
 }
 
+async function fetchGTPools(chainKey, addr){
+  var c = CHAINS[chainKey];
+  if (!c) return null;
+  var r = await fetch("https://api.geckoterminal.com/api/v2/networks/" + c.gt + "/tokens/" + encodeURIComponent(addr) + "/pools?page=1");
+  if (!r.ok) return null;
+  var j = await r.json();
+  var arr = (j && j.data) || [];
+  return arr.map(function(x){
+    var a = x.attributes || {};
+    var tx = a.transactions && a.transactions.h24;
+    var id = String(x.id || "");
+    return {
+      addr: a.address || id.replace(/^[^_]*_/, ""), name: a.name || "bazen",
+      liq: pf(a.reserve_in_usd) || 0, vol: a.volume_usd ? (pf(a.volume_usd.h24) || 0) : 0,
+      buys: tx ? (num(tx.buys) || 0) : 0, sells: tx ? (num(tx.sells) || 0) : 0
+    };
+  }).filter(function(x){ return x.addr; });
+}
+
 function pickBest(pairs, addr){
   var a = addr.toLowerCase();
   var own = pairs.filter(function(p){
@@ -420,7 +439,7 @@ function pickBest(pairs, addr){
   return {best:list[0], list:list};
 }
 
-function marketMetrics(p, list, gt){
+function marketMetrics(p, list, gt, gpools){
   var rows = [], liq = p.liquidity && num(p.liquidity.usd);
   var mc = num(p.marketCap), fdv = num(p.fdv);
   var vol = list.reduce(function(s2, x){ return s2 + ((x.volume && num(x.volume.h24)) || 0); }, 0);
@@ -456,7 +475,7 @@ function marketMetrics(p, list, gt){
     var dr = dexLiq > 0 ? gt.liq / dexLiq : Infinity;
     if (dr > 3 || dr < 1 / 3) {
       rows.push(metric("Razhajanje virov", "likvidnost se ne ujema",
-        "DEXScreener " + usd(dexLiq) + ", GeckoTerminal " + usd(gt.liq) + ". Eden od virov verjetno ne vidi glavnega bazena (npr. Uniswap V4). Preveri na Binance Web3 ali DexTools.", "amber"));
+        "DEXScreener " + usd(dexLiq) + ", GeckoTerminal " + usd(gt.liq) + ". Eden od virov verjetno ne vidi glavnega bazena (npr. PancakeSwap Infinity ali Uniswap V4). Preveri na Binance Web3 ali DexTools.", "amber"));
     }
   }
   // mcap / fdv
@@ -478,11 +497,18 @@ function marketMetrics(p, list, gt){
       "Promet " + usd(vol) + ". Zelo visoko razmerje pomeni agresivno trgovanje in slippage.",
       r3 > 10 ? "red" : r3 > 3 ? "amber" : "green"));
   }
-  // buys / sells
-  if (t && (t.buys + t.sells) > 0) {
-    var sr = t.sells / Math.max(t.buys, 1);
-    rows.push(metric("Nakupi : prodaje (24 h)", t.buys + " : " + t.sells,
-      "Prodaje bistveno nad nakupi pogosto kažejo na izstopanje.",
+  // buys / sells (seštevek vseh parov, po potrebi iz GeckoTerminala)
+  var tb = 0, ts = 0, txSrc = "";
+  list.forEach(function(x){ var tt = x.txns && x.txns.h24; if (tt) { tb += tt.buys || 0; ts += tt.sells || 0; } });
+  if (gpools && gpools.length) {
+    var gb = 0, gs = 0;
+    gpools.forEach(function(x){ gb += x.buys; gs += x.sells; });
+    if (gb + gs > tb + ts) { tb = gb; ts = gs; txSrc = " (vir: GeckoTerminal)"; }
+  }
+  if (tb + ts > 0) {
+    var sr = ts / Math.max(tb, 1);
+    rows.push(metric("Nakupi : prodaje (24 h)", tb + " : " + ts,
+      "Prodaje bistveno nad nakupi pogosto kažejo na izstopanje." + txSrc,
       sr > 1.5 ? "red" : sr > 1.15 ? "amber" : "green"));
   }
   // starost
@@ -676,7 +702,7 @@ async function loadChart(tf){
     var list = candleCache[tf];
     if (!list) {
       box.innerHTML = '<div class="loading">Nalagam graf…</div>';
-      list = await fetchCandles(curChain, curPair.pairAddress, tf);
+      list = await fetchCandles(curChain, curPool, tf);
       if (my !== runCounter) return;
       candleCache[tf] = list;
     }
@@ -690,7 +716,7 @@ async function loadChart(tf){
 async function fillMotion(){
   var my = runCounter;
   try {
-    var list = await fetchCandles(curChain, curPair.pairAddress, "5m");
+    var list = await fetchCandles(curChain, curPool, "5m");
     if (my !== runCounter) return;
     candleCache["5m"] = list;
     if (list.length >= 4) {
@@ -887,12 +913,12 @@ function holdersHtml(gp, an, chainKey, addr){
     '<div class="cap">Povezava odpre transfere te denarnice za ta žeton na explorerju (tam vidiš, kdaj je kupovala in prodajala). »Trgovanja« so iz zadnjih trgovanj glavnega para in se pokažejo samo, če je denarnica sama trgovala prek tega bazena.</div>';
 }
 
-async function loadFlow(addr, chainKey, pair, list, gp, myRun){
+async function loadFlow(addr, chainKey, pair, list, gp, myRun, poolAddr, liqTot){
   var box = $("flow");
   if (!box) return;
-  var liq = list.reduce(function(s2, x){ return s2 + ((x.liquidity && x.liquidity.usd) || 0); }, 0);
+  var liq = Math.max(list.reduce(function(s2, x){ return s2 + ((x.liquidity && x.liquidity.usd) || 0); }, 0), liqTot || 0);
   var trades = null, err = "";
-  try { trades = await fetchTrades(chainKey, pair.pairAddress, addr); }
+  try { trades = await fetchTrades(chainKey, poolAddr || pair.pairAddress, addr); }
   catch (e) { err = (e instanceof TypeError) ? "GeckoTerminal ni dosegljiv (omrežje ali omejitev brskalnika)." : e.message; }
   if (myRun !== runCounter) return;
   var an = null;
@@ -938,9 +964,25 @@ async function run(){
   var chainKey = p.chainId;
   var chain = CHAINS[chainKey];
 
-  var gtd = null;
+  var gtd = null, gpl = null;
   try { gtd = await fetchGT(chainKey, addr); } catch (eg) {}
-  var rows = marketMetrics(p, list, gtd);
+  try { gpl = await fetchGTPools(chainKey, addr); } catch (eg2) {}
+  if (gpl && gpl.length) {
+    if (!gtd) gtd = {liq: null, mc: null, fdv: null, vol: null};
+    var sl = 0, sv = 0;
+    gpl.forEach(function(x){ sl += x.liq; sv += x.vol; });
+    if (sl > (gtd.liq || 0)) gtd.liq = sl;
+    if (sv > (gtd.vol || 0)) gtd.vol = sv;
+  }
+  var poolAddr = p.pairAddress, poolLiq = (p.liquidity && num(p.liquidity.usd)) || 0, poolNote = "";
+  if (gpl && gpl.length) {
+    var topP = gpl.slice().sort(function(a, b){ return b.liq - a.liq; })[0];
+    if (topP && topP.addr && topP.liq > 3 * poolLiq) {
+      poolAddr = topP.addr; poolLiq = topP.liq;
+      poolNote = " Graf, vrstica 15 min in analiza trgovcev so iz največjega bazena po GeckoTerminalu (" + topP.name + ", likvidnost " + usd(topP.liq) + "), ker je veliko večji od glavnega para pri DEXScreenerju. Spremembe cene v tabeli so še vedno z DEXScreenerjevega para.";
+    }
+  }
+  var rows = marketMetrics(p, list, gtd, gpl);
   var secRows = [], secNote = "", gp = null;
   if (chain && chain.id) {
     try {
@@ -976,7 +1018,7 @@ async function run(){
     '<div><div class="price">' + esc(price(num(p.priceUsd))) + '</div>' +
     '<div class="chg ' + (ch != null && ch < 0 ? "down" : "up") + '" style="text-align:right">' + (ch == null ? "" : "24 h: " + esc(pct(ch, 1))) + '</div></div></div>' +
     '<div class="verdict ' + vClass + '"><b>' + esc(vTitle) + '</b><p>' + esc(vText) + '</p></div>' +
-    '<h2>Gibanje' + infoBtn('sec_gibanje') + '</h2>' + note('Sprememba cene je z glavnega para (DEXScreener), promet in nakupi/prodaje so seštevek vseh parov. Graf in vrstica 15 min sta iz svečk GeckoTerminal.') + motionTable(p, list) +
+    '<h2>Gibanje' + infoBtn('sec_gibanje') + '</h2>' + note('Sprememba cene je z glavnega para (DEXScreener), promet in nakupi/prodaje so seštevek vseh parov. Graf in vrstica 15 min sta iz svečk GeckoTerminal.' + poolNote) + motionTable(p, list) +
     '<div class="tabs" id="tabs"><button data-tf="5m" class="on">5 min</button><button data-tf="15m">15 min</button><button data-tf="1h">1 ura</button></div>' +
     '<div class="card chartbox" id="chart"><div class="loading">Nalagam graf…</div></div>' +
     '<h2>Okvir trejda' + infoBtn('sec_okvir') + '</h2>' + note('Izračun za tvoj znesek: zdrs, stroški in razmerje dobiček : tveganje. Podatki: cena in likvidnost glavnega para.') + '<div class="card" id="tframe"></div>' +
@@ -988,11 +1030,11 @@ async function run(){
     '<h2>Pari</h2>' + note('Vsi DEX bazeni tega žetona (DEXScreener), največja likvidnost prva.') + pairsTable(list) +
     '<h2>Povezave</h2>' + note('Hitre povezave na zunanje strani za ta naslov.') + linkSet(addr, chainKey, p);
 
-  curPair = p; curChain = chainKey;
-  curTF = {price: num(p.priceUsd), liq: (p.liquidity && num(p.liquidity.usd)) || 0, sym: sym};
+  curPair = p; curPool = poolAddr; curChain = chainKey;
+  curTF = {price: num(p.priceUsd), liq: poolLiq, sym: sym};
   renderTradeFrame();
   fillMotion();
-  loadFlow(addr, chainKey, p, list, gp, myRun);
+  loadFlow(addr, chainKey, p, list, gp, myRun, poolAddr, gtd && gtd.liq);
   try { localStorage.setItem("ct_last", addr); } catch (e) {}
   out.dataset.sym = sym || "";
   out.dataset.chain = chainKey || "";
