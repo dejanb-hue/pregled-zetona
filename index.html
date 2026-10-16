@@ -405,7 +405,10 @@ async function fetchGT(chainKey, addr){
   var a = j && j.data && j.data.attributes;
   if (!a) return null;
   var v = a.volume_usd;
-  return {liq: pf(a.total_reserve_in_usd), mc: pf(a.market_cap_usd), fdv: pf(a.fdv_usd), vol: v ? pf(v.h24) : null};
+  var gl = pf(a.total_reserve_in_usd), gv = v ? pf(v.h24) : null;
+  if (gl != null && gl > 1e10) gl = null;
+  if (gv != null && gv > 1e11) gv = null;
+  return {liq: gl, mc: pf(a.market_cap_usd), fdv: pf(a.fdv_usd), vol: gv};
 }
 
 async function fetchGTPools(chainKey, addr){
@@ -421,6 +424,7 @@ async function fetchGTPools(chainKey, addr){
     var id = String(x.id || "");
     return {
       addr: a.address || id.replace(/^[^_]*_/, ""), name: a.name || "bazen",
+      px: pf(a.base_token_price_usd), pq: pf(a.quote_token_price_usd),
       liq: pf(a.reserve_in_usd) || 0, vol: a.volume_usd ? (pf(a.volume_usd.h24) || 0) : 0,
       buys: tx ? (num(tx.buys) || 0) : 0, sells: tx ? (num(tx.sells) || 0) : 0
     };
@@ -618,6 +622,19 @@ function linkSet(addr, chainKey, pair){
 /* ---------- gibanje in graf (GeckoTerminal) ---------- */
 var TF = {"5m":["minute",5,"5 min"], "15m":["minute",15,"15 min"], "1h":["hour",1,"1 uro"]};
 
+async function fetchCandlesSmart(tf){
+  var alt = curPair && curPool !== curPair.pairAddress;
+  var list = null;
+  try { list = await fetchCandles(curChain, curPool, tf); }
+  catch (e) { if (!alt) throw e; }
+  if ((!list || list.length < 6) && alt) {
+    var l2 = await fetchCandles(curChain, curPair.pairAddress, tf);
+    if (l2 && l2.length > (list ? list.length : 0)) return l2;
+  }
+  if (!list) throw new Error("Za ta par ni podatkov o svečah.");
+  return list;
+}
+
 async function fetchCandles(chainKey, pool, tf){
   var c = CHAINS[chainKey];
   if (!c) throw new Error("Veriga ni podprta.");
@@ -702,7 +719,7 @@ async function loadChart(tf){
     var list = candleCache[tf];
     if (!list) {
       box.innerHTML = '<div class="loading">Nalagam graf…</div>';
-      list = await fetchCandles(curChain, curPool, tf);
+      list = await fetchCandlesSmart(tf);
       if (my !== runCounter) return;
       candleCache[tf] = list;
     }
@@ -716,7 +733,7 @@ async function loadChart(tf){
 async function fillMotion(){
   var my = runCounter;
   try {
-    var list = await fetchCandles(curChain, curPool, "5m");
+    var list = await fetchCandlesSmart("5m");
     if (my !== runCounter) return;
     candleCache["5m"] = list;
     if (list.length >= 4) {
@@ -920,6 +937,9 @@ async function loadFlow(addr, chainKey, pair, list, gp, myRun, poolAddr, liqTot)
   var trades = null, err = "";
   try { trades = await fetchTrades(chainKey, poolAddr || pair.pairAddress, addr); }
   catch (e) { err = (e instanceof TypeError) ? "GeckoTerminal ni dosegljiv (omrežje ali omejitev brskalnika)." : e.message; }
+  if ((!trades || trades.length < 5) && poolAddr && poolAddr !== pair.pairAddress) {
+    try { trades = await fetchTrades(chainKey, pair.pairAddress, addr); err = ""; } catch (e2) {}
+  }
   if (myRun !== runCounter) return;
   var an = null;
   if (trades) {
@@ -967,6 +987,17 @@ async function run(){
   var gtd = null, gpl = null;
   try { gtd = await fetchGT(chainKey, addr); } catch (eg) {}
   try { gpl = await fetchGTPools(chainKey, addr); } catch (eg2) {}
+  var refPx = num(p.priceUsd) || 0, capL = Math.max(num(p.fdv) || 0, num(p.marketCap) || 0) * 2;
+  if (gtd && capL > 0 && gtd.liq > capL) gtd.liq = null;
+  if (gpl) gpl = gpl.filter(function(x){
+    if (!isFinite(x.liq) || x.liq > 1e10) return false;
+    if (capL > 0 && x.liq > capL) return false;
+    if (refPx > 0 && (x.px > 0 || x.pq > 0)) {
+      var okPx = [x.px, x.pq].some(function(v){ return v > 0 && v / refPx > 0.8 && v / refPx < 1.25; });
+      if (!okPx) return false;
+    }
+    return true;
+  });
   if (gpl && gpl.length) {
     if (!gtd) gtd = {liq: null, mc: null, fdv: null, vol: null};
     var sl = 0, sv = 0;
@@ -976,7 +1007,8 @@ async function run(){
   }
   var poolAddr = p.pairAddress, poolLiq = (p.liquidity && num(p.liquidity.usd)) || 0, poolNote = "";
   if (gpl && gpl.length) {
-    var topP = gpl.slice().sort(function(a, b){ return b.liq - a.liq; })[0];
+    var topP = gpl.filter(function(x){ return x.vol > 0 || (x.buys + x.sells) > 0; })
+      .sort(function(a, b){ return b.liq - a.liq; })[0];
     if (topP && topP.addr && topP.liq > 3 * poolLiq) {
       poolAddr = topP.addr; poolLiq = topP.liq;
       poolNote = " Graf, vrstica 15 min in analiza trgovcev so iz največjega bazena po GeckoTerminalu (" + topP.name + ", likvidnost " + usd(topP.liq) + "), ker je veliko večji od glavnega para pri DEXScreenerju. Spremembe cene v tabeli so še vedno z DEXScreenerjevega para.";
