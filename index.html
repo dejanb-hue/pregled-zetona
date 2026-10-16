@@ -296,6 +296,7 @@ var INFO = {
   buys_sells: ["Nakupi : prodaje (24 h)", "Število nakupnih in prodajnih transakcij v 24 h (seštevek vseh parov). Prodaje bistveno nad nakupi lahko pomenijo izstopanje. Število transakcij ni obseg v dolarjih."],
   age: ["Starost para", "Čas od nastanka glavnega para. Mlajši par = višje tveganje (manj zgodovine, lažje manipulacije). Pod 1 dnem rdeče, pod 14 dnevi rumeno."],
   chg24: ["Sprememba cene", "Sprememba cene v 24 h (in 1 h) z glavnega para. Po rasti čez 100 % je večji del premika običajno že mimo. Rumeno nad 40 %, rdeče nad 100 %."],
+  src_diff: ["Razhajanje virov", "DEXScreener in GeckoTerminal se pri skupni likvidnosti razlikujeta za več kot 3x. Pogost razlog: eden od virov ne vidi največjega bazena (npr. Uniswap V4). V tem primeru aplikacija uporabi večjo vrednost, a to je ocena. Preveri tudi na Binance Web3 ali DexTools."],
   pairs_n: ["Število parov", "Koliko DEX parov ima ta žeton. Skupna likvidnost je seštevek čez vse pare."],
 
   honeypot: ["Honeypot", "Honeypot je žeton, ki ga lahko kupiš, a ne prodaš. GoPlus ga zazna s simulacijo prodaje. »DA« je rdeča zastavica: ne kupuj."],
@@ -330,7 +331,7 @@ var INFO = {
 };
 var INFO_BY_LABEL = {
   "Likvidnost proti MCAP": "liq_mcap", "Likvidnost": "liq_mcap", "V obtoku (MCAP / FDV)": "mc_fdv", "MCAP / FDV": "mc_fdv",
-  "Promet 24 h proti likvidnosti": "vol_liq", "Nakupi : prodaje (24 h)": "buys_sells", "Starost para": "age", "Sprememba cene": "chg24", "Število parov": "pairs_n",
+  "Promet 24 h proti likvidnosti": "vol_liq", "Nakupi : prodaje (24 h)": "buys_sells", "Starost para": "age", "Sprememba cene": "chg24", "Število parov": "pairs_n", "Razhajanje virov": "src_diff",
   "Honeypot": "honeypot", "Davek nakup / prodaja": "tax", "Koda pogodbe objavljena": "opensrc", "Lastnik lahko izdaja nove žetone": "mint",
   "Posredniška pogodba (proxy)": "proxy", "Skriti lastnik": "hidden", "Lahko prevzame lastništvo nazaj": "takeback", "Lastništvo": "owner",
   "Imetniki": "holders_n", "Top 10 denarnic": "top10", "Delež ustvarjalca": "creator",
@@ -395,6 +396,18 @@ async function fetchDex(addr){
   return (j && j.pairs) ? j.pairs : [];
 }
 
+async function fetchGT(chainKey, addr){
+  var c = CHAINS[chainKey];
+  if (!c) return null;
+  var r = await fetch("https://api.geckoterminal.com/api/v2/networks/" + c.gt + "/tokens/" + encodeURIComponent(addr));
+  if (!r.ok) return null;
+  var j = await r.json();
+  var a = j && j.data && j.data.attributes;
+  if (!a) return null;
+  var v = a.volume_usd;
+  return {liq: pf(a.total_reserve_in_usd), mc: pf(a.market_cap_usd), fdv: pf(a.fdv_usd), vol: v ? pf(v.h24) : null};
+}
+
 function pickBest(pairs, addr){
   var a = addr.toLowerCase();
   var own = pairs.filter(function(p){
@@ -407,25 +420,50 @@ function pickBest(pairs, addr){
   return {best:list[0], list:list};
 }
 
-function marketMetrics(p, list){
+function marketMetrics(p, list, gt){
   var rows = [], liq = p.liquidity && num(p.liquidity.usd);
   var mc = num(p.marketCap), fdv = num(p.fdv);
   var vol = list.reduce(function(s2, x){ return s2 + ((x.volume && num(x.volume.h24)) || 0); }, 0);
   var t = p.txns && p.txns.h24;
   var totalLiq = list.reduce(function(s, x){return s + ((x.liquidity && x.liquidity.usd) || 0);}, 0);
   if (totalLiq > 0) liq = totalLiq;
+  var dexLiq = totalLiq, src = "";
+  if (gt) {
+    if (gt.liq > 0 && gt.liq > (liq || 0)) { liq = gt.liq; totalLiq = gt.liq; src = " (vir: GeckoTerminal)"; }
+    if (gt.vol > 0 && gt.vol > vol) vol = gt.vol;
+  }
+  var okMF = function(m, f){ return m > 0 && f > 0 && m <= f * 1.02; };
+  var mcBad = false;
+  if (!okMF(mc, fdv)) {
+    if (gt && okMF(gt.mc, gt.fdv)) { mc = gt.mc; fdv = gt.fdv; }
+    else {
+      if (!(mc > 0) && gt && gt.mc > 0) mc = gt.mc;
+      if (!(fdv > 0) && gt && gt.fdv > 0) fdv = gt.fdv;
+      if (mc > 0 && fdv > 0 && !okMF(mc, fdv)) mcBad = true;
+    }
+  }
 
   // likvidnost / mcap
   if (liq != null && mc) {
     var r1 = liq / mc * 100;
     rows.push(metric("Likvidnost proti MCAP", pct(r1, 2),
-      "Likvidnost " + usd(liq) + ", MCAP " + usd(mc) + ". Pod 3 % je izstop drag.",
+      "Likvidnost " + usd(liq) + src + ", MCAP " + usd(mc) + (mcBad ? " (neskladen)" : "") + ". Pod 3 % je izstop drag.",
       r1 < 3 ? "red" : r1 < 10 ? "amber" : "green"));
   } else {
     rows.push(metric("Likvidnost", usd(liq), "MCAP ni na voljo, razmerja ni mogoče izračunati.", "amber"));
   }
+  if (gt && gt.liq > 0) {
+    var dr = dexLiq > 0 ? gt.liq / dexLiq : Infinity;
+    if (dr > 3 || dr < 1 / 3) {
+      rows.push(metric("Razhajanje virov", "likvidnost se ne ujema",
+        "DEXScreener " + usd(dexLiq) + ", GeckoTerminal " + usd(gt.liq) + ". Eden od virov verjetno ne vidi glavnega bazena (npr. Uniswap V4). Preveri na Binance Web3 ali DexTools.", "amber"));
+    }
+  }
   // mcap / fdv
-  if (mc && fdv) {
+  if (mcBad) {
+    rows.push(metric("MCAP / FDV", usd(mc) + " / " + usd(fdv),
+      "Podatki so neskladni: MCAP ne more biti večji od FDV. Preveri na CoinGecko ali Binance.", "amber"));
+  } else if (mc && fdv) {
     var r2 = mc / fdv * 100;
     rows.push(metric("V obtoku (MCAP / FDV)", pct(r2, 0),
       "Preostali žetoni še pridejo na trg. Preveri urnik odklepanj.",
@@ -900,7 +938,9 @@ async function run(){
   var chainKey = p.chainId;
   var chain = CHAINS[chainKey];
 
-  var rows = marketMetrics(p, list);
+  var gtd = null;
+  try { gtd = await fetchGT(chainKey, addr); } catch (eg) {}
+  var rows = marketMetrics(p, list, gtd);
   var secRows = [], secNote = "", gp = null;
   if (chain && chain.id) {
     try {
@@ -940,7 +980,7 @@ async function run(){
     '<div class="tabs" id="tabs"><button data-tf="5m" class="on">5 min</button><button data-tf="15m">15 min</button><button data-tf="1h">1 ura</button></div>' +
     '<div class="card chartbox" id="chart"><div class="loading">Nalagam graf…</div></div>' +
     '<h2>Okvir trejda' + infoBtn('sec_okvir') + '</h2>' + note('Izračun za tvoj znesek: zdrs, stroški in razmerje dobiček : tveganje. Podatki: cena in likvidnost glavnega para.') + '<div class="card" id="tframe"></div>' +
-    '<h2>Trg</h2>' + note('Razmerja iz DEXScreenerja. Zeleno = nižje, rumeno = previdnost, rdeče = visoko tveganje. Pragovi so splošna pravila, ne jamstvo.') + '<div class="card">' + rows.join("") + '</div>' +
+    '<h2>Trg</h2>' + note('Razmerja iz DEXScreenerja, likvidnost in promet po potrebi iz GeckoTerminala (večja vrednost). Zeleno = nižje, rumeno = previdnost, rdeče = visoko tveganje. Pragovi so splošna pravila, ne jamstvo.') + '<div class="card">' + rows.join("") + '</div>' +
     '<h2>Varnost pogodbe' + infoBtn('sec_varnost') + '</h2>' + note('GoPlus preveri pogodbo: honeypot, davke, lastništvo, imetnike. Deluje za EVM verige, za Solano uporabi RugCheck.') +
     (secRows.length ? '<div class="card">' + secRows.join("") + '</div>' : '') +
     (secNote ? '<div class="msg">' + esc(secNote) + '</div>' : '') +
