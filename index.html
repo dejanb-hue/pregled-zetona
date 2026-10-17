@@ -211,7 +211,10 @@ details.frow[open] summary{margin-bottom:4px}
     <button class="ghost small" id="save">Shrani v seznam</button>
   </div>
 
+  <input id="twin" type="text" autocomplete="off" spellcheck="false" placeholder="Čas, ki te zanima, npr. 04:25-06:15" aria-label="Časovno okno" style="width:100%;margin-top:8px">
   <div id="out" aria-live="polite"></div>
+  <div class="row" style="margin-top:12px;flex-wrap:wrap"><button class="ghost small" id="cpcoin">Kopiraj: podatki žetona</button><button class="ghost small" id="cpother">Kopiraj: ostali podatki</button></div>
+  <div class="stat" id="cpmsg" style="margin-top:6px"></div>
 
   <h2 id="wlh" hidden>Moj seznam</h2>
   <div id="watch" class="watch"></div>
@@ -234,8 +237,8 @@ var CHAINS = {
 };
 
 var $ = function(id){return document.getElementById(id);};
-var lastAddr = "";
-var runCounter = 0, curPair = null, curPool = "", curChain = "", candleCache = {};
+var lastAddr = ""; var lastAn = null, lastTr = [], lastCov = null, lastFutOk = [];
+var runCounter = 0, curPair = null, curChain = "", candleCache = {};
 
 function esc(s){
   return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
@@ -296,7 +299,7 @@ var INFO = {
   buys_sells: ["Nakupi : prodaje (24 h)", "Število nakupnih in prodajnih transakcij v 24 h (seštevek vseh parov). Prodaje bistveno nad nakupi lahko pomenijo izstopanje. Število transakcij ni obseg v dolarjih."],
   age: ["Starost para", "Čas od nastanka glavnega para. Mlajši par = višje tveganje (manj zgodovine, lažje manipulacije). Pod 1 dnem rdeče, pod 14 dnevi rumeno."],
   chg24: ["Sprememba cene", "Sprememba cene v 24 h (in 1 h) z glavnega para. Po rasti čez 100 % je večji del premika običajno že mimo. Rumeno nad 40 %, rdeče nad 100 %."],
-  src_diff: ["Razhajanje virov", "DEXScreener in GeckoTerminal se pri skupni likvidnosti razlikujeta za več kot 3x. Pogost razlog: eden od virov ne vidi največjega bazena (npr. PancakeSwap Infinity ali Uniswap V4). V tem primeru aplikacija uporabi večjo vrednost, a to je ocena. Preveri tudi na Binance Web3 ali DexTools."],
+  src_diff: ["Razhajanje virov", "DEXScreener in GeckoTerminal se pri skupni likvidnosti razlikujeta za več kot 3x. Pogost razlog: eden od virov ne vidi največjega bazena (npr. Uniswap V4). V tem primeru aplikacija uporabi večjo vrednost, a to je ocena. Preveri tudi na Binance Web3 ali DexTools."],
   pairs_n: ["Število parov", "Koliko DEX parov ima ta žeton. Skupna likvidnost je seštevek čez vse pare."],
 
   honeypot: ["Honeypot", "Honeypot je žeton, ki ga lahko kupiš, a ne prodaš. GoPlus ga zazna s simulacijo prodaje. »DA« je rdeča zastavica: ne kupuj."],
@@ -405,30 +408,7 @@ async function fetchGT(chainKey, addr){
   var a = j && j.data && j.data.attributes;
   if (!a) return null;
   var v = a.volume_usd;
-  var gl = pf(a.total_reserve_in_usd), gv = v ? pf(v.h24) : null;
-  if (gl != null && gl > 1e10) gl = null;
-  if (gv != null && gv > 1e11) gv = null;
-  return {liq: gl, mc: pf(a.market_cap_usd), fdv: pf(a.fdv_usd), vol: gv};
-}
-
-async function fetchGTPools(chainKey, addr){
-  var c = CHAINS[chainKey];
-  if (!c) return null;
-  var r = await fetch("https://api.geckoterminal.com/api/v2/networks/" + c.gt + "/tokens/" + encodeURIComponent(addr) + "/pools?page=1");
-  if (!r.ok) return null;
-  var j = await r.json();
-  var arr = (j && j.data) || [];
-  return arr.map(function(x){
-    var a = x.attributes || {};
-    var tx = a.transactions && a.transactions.h24;
-    var id = String(x.id || "");
-    return {
-      addr: a.address || id.replace(/^[^_]*_/, ""), name: a.name || "bazen",
-      px: pf(a.base_token_price_usd), pq: pf(a.quote_token_price_usd),
-      liq: pf(a.reserve_in_usd) || 0, vol: a.volume_usd ? (pf(a.volume_usd.h24) || 0) : 0,
-      buys: tx ? (num(tx.buys) || 0) : 0, sells: tx ? (num(tx.sells) || 0) : 0
-    };
-  }).filter(function(x){ return x.addr; });
+  return {liq: pf(a.total_reserve_in_usd), mc: pf(a.market_cap_usd), fdv: pf(a.fdv_usd), vol: v ? pf(v.h24) : null};
 }
 
 function pickBest(pairs, addr){
@@ -443,7 +423,7 @@ function pickBest(pairs, addr){
   return {best:list[0], list:list};
 }
 
-function marketMetrics(p, list, gt, gpools){
+function marketMetrics(p, list, gt){
   var rows = [], liq = p.liquidity && num(p.liquidity.usd);
   var mc = num(p.marketCap), fdv = num(p.fdv);
   var vol = list.reduce(function(s2, x){ return s2 + ((x.volume && num(x.volume.h24)) || 0); }, 0);
@@ -479,7 +459,7 @@ function marketMetrics(p, list, gt, gpools){
     var dr = dexLiq > 0 ? gt.liq / dexLiq : Infinity;
     if (dr > 3 || dr < 1 / 3) {
       rows.push(metric("Razhajanje virov", "likvidnost se ne ujema",
-        "DEXScreener " + usd(dexLiq) + ", GeckoTerminal " + usd(gt.liq) + ". Eden od virov verjetno ne vidi glavnega bazena (npr. PancakeSwap Infinity ali Uniswap V4). Preveri na Binance Web3 ali DexTools.", "amber"));
+        "DEXScreener " + usd(dexLiq) + ", GeckoTerminal " + usd(gt.liq) + ". Eden od virov verjetno ne vidi glavnega bazena (npr. Uniswap V4). Preveri na Binance Web3 ali DexTools.", "amber"));
     }
   }
   // mcap / fdv
@@ -501,18 +481,11 @@ function marketMetrics(p, list, gt, gpools){
       "Promet " + usd(vol) + ". Zelo visoko razmerje pomeni agresivno trgovanje in slippage.",
       r3 > 10 ? "red" : r3 > 3 ? "amber" : "green"));
   }
-  // buys / sells (seštevek vseh parov, po potrebi iz GeckoTerminala)
-  var tb = 0, ts = 0, txSrc = "";
-  list.forEach(function(x){ var tt = x.txns && x.txns.h24; if (tt) { tb += tt.buys || 0; ts += tt.sells || 0; } });
-  if (gpools && gpools.length) {
-    var gb = 0, gs = 0;
-    gpools.forEach(function(x){ gb += x.buys; gs += x.sells; });
-    if (gb + gs > tb + ts) { tb = gb; ts = gs; txSrc = " (vir: GeckoTerminal)"; }
-  }
-  if (tb + ts > 0) {
-    var sr = ts / Math.max(tb, 1);
-    rows.push(metric("Nakupi : prodaje (24 h)", tb + " : " + ts,
-      "Prodaje bistveno nad nakupi pogosto kažejo na izstopanje." + txSrc,
+  // buys / sells
+  if (t && (t.buys + t.sells) > 0) {
+    var sr = t.sells / Math.max(t.buys, 1);
+    rows.push(metric("Nakupi : prodaje (24 h)", t.buys + " : " + t.sells,
+      "Prodaje bistveno nad nakupi pogosto kažejo na izstopanje.",
       sr > 1.5 ? "red" : sr > 1.15 ? "amber" : "green"));
   }
   // starost
@@ -622,19 +595,6 @@ function linkSet(addr, chainKey, pair){
 /* ---------- gibanje in graf (GeckoTerminal) ---------- */
 var TF = {"5m":["minute",5,"5 min"], "15m":["minute",15,"15 min"], "1h":["hour",1,"1 uro"]};
 
-async function fetchCandlesSmart(tf){
-  var alt = curPair && curPool !== curPair.pairAddress;
-  var list = null;
-  try { list = await fetchCandles(curChain, curPool, tf); }
-  catch (e) { if (!alt) throw e; }
-  if ((!list || list.length < 6) && alt) {
-    var l2 = await fetchCandles(curChain, curPair.pairAddress, tf);
-    if (l2 && l2.length > (list ? list.length : 0)) return l2;
-  }
-  if (!list) throw new Error("Za ta par ni podatkov o svečah.");
-  return list;
-}
-
 async function fetchCandles(chainKey, pool, tf){
   var c = CHAINS[chainKey];
   if (!c) throw new Error("Veriga ni podprta.");
@@ -719,7 +679,7 @@ async function loadChart(tf){
     var list = candleCache[tf];
     if (!list) {
       box.innerHTML = '<div class="loading">Nalagam graf…</div>';
-      list = await fetchCandlesSmart(tf);
+      list = await fetchCandles(curChain, curPair.pairAddress, tf);
       if (my !== runCounter) return;
       candleCache[tf] = list;
     }
@@ -733,7 +693,7 @@ async function loadChart(tf){
 async function fillMotion(){
   var my = runCounter;
   try {
-    var list = await fetchCandlesSmart("5m");
+    var list = await fetchCandles(curChain, curPair.pairAddress, "5m");
     if (my !== runCounter) return;
     candleCache["5m"] = list;
     if (list.length >= 4) {
@@ -831,11 +791,8 @@ function analyzeTrades(tr, liq){
     if (t.kind === "buy") c.buy += t.vol; else c.sell += t.vol;
   });
   wl.forEach(function(w){ cls[w.cls].w++; });
-  var jumps = [];
-  for (var i = 1; i < asc.length; i++) {
-    var pa = asc[i - 1].px, pb = asc[i].px;
-    if (pa > 0 && pb > 0) jumps.push({d: (pb / pa - 1) * 100, t: asc[i]});
-  }
+  var jumps = [], lpx = {};
+  asc.forEach(function(t){ var k = t.pl || "", pa = lpx[k], pb = t.px; if (pa > 0 && pb > 0) jumps.push({d: (pb / pa - 1) * 100, t: t}); if (pb > 0) lpx[k] = pb; });
   jumps.sort(function(x, y){ return Math.abs(y.d) - Math.abs(x.d); });
   var buckets = {};
   asc.forEach(function(t){
@@ -895,7 +852,7 @@ function flowHtml(an, chainKey, addr){
       '<td>' + esc(cn[w.cls] + (w.reasons[0] ? " · " + w.reasons[0] : "")) + '</td><td>' + w.n + '</td><td>' + esc(usd(w.buy) + " / " + usd(w.sell)) + '</td></tr>';
   }).join("");
   var legend = '<span style="color:var(--accent)">■</span> normalni · <span style="color:var(--amber)">■</span> kiti · <span style="color:var(--muted)">■</span> boti';
-  return '<h2>Promet po vrsti trgovcev' + infoBtn('sec_flow') + '</h2>' + note('Kdo ustvarja promet. Vir: zadnjih ~300 trgovanj glavnega para (GeckoTerminal). Razvrstitev je ocena po pravilih.') + '<div class="card"><div class="stack">' + seg + '</div><div class="cap">' + legend + '</div>' + rows + extra + '</div>' +
+  return '<h2>Promet po vrsti trgovcev' + infoBtn('sec_flow') + '</h2>' + note('Kdo ustvarja promet. Vir: zadnja trgovanja do 3 največjih bazenov (GeckoTerminal), zajeto okno je prikazano spodaj. Razvrstitev je ocena po pravilih.') + covHtml() + '<div class="card"><div class="stack">' + seg + '</div><div class="cap">' + legend + '</div>' + rows + extra + '</div>' +
     '<h2 style="font-size:14px;color:var(--muted)">Največji trgovci po prometu</h2>' +
     '<div class="card" style="overflow-x:auto"><table class="pairs"><thead><tr><th>Naslov</th><th>Razred' + infoBtn('w_class') + '</th><th>Tr.' + infoBtn('w_n') + '</th><th>Nak. / prod.' + infoBtn('w_nb') + '</th></tr></thead><tbody>' + trs + '</tbody></table></div>' +
     '<div class="cap">Zadnjih ' + an.n + ' trgovanj glavnega para (' + esc(spanTxt) + '), skupaj ' + esc(usd(an.total)) + '. Kit = trgovanje nad ' + esc(usd(an.thr)) +
@@ -930,26 +887,25 @@ function holdersHtml(gp, an, chainKey, addr){
     '<div class="cap">Povezava odpre transfere te denarnice za ta žeton na explorerju (tam vidiš, kdaj je kupovala in prodajala). »Trgovanja« so iz zadnjih trgovanj glavnega para in se pokažejo samo, če je denarnica sama trgovala prek tega bazena.</div>';
 }
 
-async function loadFlow(addr, chainKey, pair, list, gp, myRun, poolAddr, liqTot){
+async function loadFlow(addr, chainKey, pair, list, gp, myRun){
   var box = $("flow");
   if (!box) return;
-  var liq = Math.max(list.reduce(function(s2, x){ return s2 + ((x.liquidity && x.liquidity.usd) || 0); }, 0), liqTot || 0);
+  var liq = list.reduce(function(s2, x){ return s2 + ((x.liquidity && x.liquidity.usd) || 0); }, 0);
   var trades = null, err = "";
-  try { trades = await fetchTrades(chainKey, poolAddr || pair.pairAddress, addr); }
+  var cov = null;
+  try { var mr = await fetchTradesMulti(chainKey, list, addr); trades = mr.trades; cov = mr; }
   catch (e) { err = (e instanceof TypeError) ? "GeckoTerminal ni dosegljiv (omrežje ali omejitev brskalnika)." : e.message; }
-  if ((!trades || trades.length < 5) && poolAddr && poolAddr !== pair.pairAddress) {
-    try { trades = await fetchTrades(chainKey, pair.pairAddress, addr); err = ""; } catch (e2) {}
-  }
   if (myRun !== runCounter) return;
   var an = null;
   if (trades) {
-    if (trades.length >= 5) an = analyzeTrades(trades, liq);
+    if (trades.length >= 5) { an = analyzeTrades(trades, liq); lastAn = an; lastTr = trades; lastCov = cov; }
     else err = "Premalo trgovanj za analizo (" + trades.length + ").";
   }
   var box2 = $("flow");
   if (!box2) return;
-  box2.innerHTML = (an ? flowHtml(an, chainKey, addr) : '<h2>Promet po vrsti trgovcev' + infoBtn('sec_flow') + '</h2>' + note('Kdo ustvarja promet. Vir: zadnjih ~300 trgovanj glavnega para (GeckoTerminal). Razvrstitev je ocena po pravilih.') + '<div class="msg">' + esc(err || "Ni podatkov o trgovanjih.") + '</div>') +
-    holdersHtml(gp, an, chainKey, addr);
+  box2.innerHTML = (an ? flowHtml(an, chainKey, addr) : '<h2>Promet po vrsti trgovcev' + infoBtn('sec_flow') + '</h2>' + note('Kdo ustvarja promet. Vir: zadnja trgovanja do 3 največjih bazenov (GeckoTerminal), zajeto okno je prikazano spodaj. Razvrstitev je ocena po pravilih.') + '<div class="msg">' + esc(err || "Ni podatkov o trgovanjih.") + '</div>') +
+    holdersHtml(gp, an, chainKey, addr) + deepLinks(addr, chainKey, list);
+  updateWarn();
 }
 
 /* ---------- glavni tok ---------- */
@@ -964,7 +920,7 @@ async function run(){
     out.innerHTML = '<div class="msg err">Naslov ni videti veljaven. Naslov na BNB Chain, Base ali Ethereumu se začne z 0x in ima 42 znakov. Naslov na Solani ima 32 do 44 znakov brez 0x.</div>';
     return;
   }
-  lastAddr = addr;
+  lastAddr = addr; lastAn = null; lastTr = []; lastCov = null;
   var myRun = ++runCounter; candleCache = {};
   out.innerHTML = '<div class="loading">Nalagam podatke…</div>';
 
@@ -984,37 +940,9 @@ async function run(){
   var chainKey = p.chainId;
   var chain = CHAINS[chainKey];
 
-  var gtd = null, gpl = null;
+  var gtd = null;
   try { gtd = await fetchGT(chainKey, addr); } catch (eg) {}
-  try { gpl = await fetchGTPools(chainKey, addr); } catch (eg2) {}
-  var refPx = num(p.priceUsd) || 0, capL = Math.max(num(p.fdv) || 0, num(p.marketCap) || 0) * 2;
-  if (gtd && capL > 0 && gtd.liq > capL) gtd.liq = null;
-  if (gpl) gpl = gpl.filter(function(x){
-    if (!isFinite(x.liq) || x.liq > 1e10) return false;
-    if (capL > 0 && x.liq > capL) return false;
-    if (refPx > 0 && (x.px > 0 || x.pq > 0)) {
-      var okPx = [x.px, x.pq].some(function(v){ return v > 0 && v / refPx > 0.8 && v / refPx < 1.25; });
-      if (!okPx) return false;
-    }
-    return true;
-  });
-  if (gpl && gpl.length) {
-    if (!gtd) gtd = {liq: null, mc: null, fdv: null, vol: null};
-    var sl = 0, sv = 0;
-    gpl.forEach(function(x){ sl += x.liq; sv += x.vol; });
-    if (sl > (gtd.liq || 0)) gtd.liq = sl;
-    if (sv > (gtd.vol || 0)) gtd.vol = sv;
-  }
-  var poolAddr = p.pairAddress, poolLiq = (p.liquidity && num(p.liquidity.usd)) || 0, poolNote = "";
-  if (gpl && gpl.length) {
-    var topP = gpl.filter(function(x){ return x.vol > 0 || (x.buys + x.sells) > 0; })
-      .sort(function(a, b){ return b.liq - a.liq; })[0];
-    if (topP && topP.addr && topP.liq > 3 * poolLiq) {
-      poolAddr = topP.addr; poolLiq = topP.liq;
-      poolNote = " Graf, vrstica 15 min in analiza trgovcev so iz največjega bazena po GeckoTerminalu (" + topP.name + ", likvidnost " + usd(topP.liq) + "), ker je veliko večji od glavnega para pri DEXScreenerju. Spremembe cene v tabeli so še vedno z DEXScreenerjevega para.";
-    }
-  }
-  var rows = marketMetrics(p, list, gtd, gpl);
+  var rows = marketMetrics(p, list, gtd);
   var secRows = [], secNote = "", gp = null;
   if (chain && chain.id) {
     try {
@@ -1050,7 +978,7 @@ async function run(){
     '<div><div class="price">' + esc(price(num(p.priceUsd))) + '</div>' +
     '<div class="chg ' + (ch != null && ch < 0 ? "down" : "up") + '" style="text-align:right">' + (ch == null ? "" : "24 h: " + esc(pct(ch, 1))) + '</div></div></div>' +
     '<div class="verdict ' + vClass + '"><b>' + esc(vTitle) + '</b><p>' + esc(vText) + '</p></div>' +
-    '<h2>Gibanje' + infoBtn('sec_gibanje') + '</h2>' + note('Sprememba cene je z glavnega para (DEXScreener), promet in nakupi/prodaje so seštevek vseh parov. Graf in vrstica 15 min sta iz svečk GeckoTerminal.' + poolNote) + motionTable(p, list) +
+    '<h2>Gibanje' + infoBtn('sec_gibanje') + '</h2>' + note('Sprememba cene je z glavnega para (DEXScreener), promet in nakupi/prodaje so seštevek vseh parov. Graf in vrstica 15 min sta iz svečk GeckoTerminal.') + motionTable(p, list) +
     '<div class="tabs" id="tabs"><button data-tf="5m" class="on">5 min</button><button data-tf="15m">15 min</button><button data-tf="1h">1 ura</button></div>' +
     '<div class="card chartbox" id="chart"><div class="loading">Nalagam graf…</div></div>' +
     '<h2>Okvir trejda' + infoBtn('sec_okvir') + '</h2>' + note('Izračun za tvoj znesek: zdrs, stroški in razmerje dobiček : tveganje. Podatki: cena in likvidnost glavnega para.') + '<div class="card" id="tframe"></div>' +
@@ -1062,11 +990,11 @@ async function run(){
     '<h2>Pari</h2>' + note('Vsi DEX bazeni tega žetona (DEXScreener), največja likvidnost prva.') + pairsTable(list) +
     '<h2>Povezave</h2>' + note('Hitre povezave na zunanje strani za ta naslov.') + linkSet(addr, chainKey, p);
 
-  curPair = p; curPool = poolAddr; curChain = chainKey;
-  curTF = {price: num(p.priceUsd), liq: poolLiq, sym: sym};
+  curPair = p; curChain = chainKey;
+  curTF = {price: num(p.priceUsd), liq: (p.liquidity && num(p.liquidity.usd)) || 0, sym: sym};
   renderTradeFrame();
   fillMotion();
-  loadFlow(addr, chainKey, p, list, gp, myRun, poolAddr, gtd && gtd.liq);
+  loadFlow(addr, chainKey, p, list, gp, myRun);
   try { localStorage.setItem("ct_last", addr); } catch (e) {}
   out.dataset.sym = sym || "";
   out.dataset.chain = chainKey || "";
@@ -1686,7 +1614,7 @@ async function scanFut(){
       });
       var ok = cands.filter(function(c){ return c.oi && c.kl; });
       if (!ok.length) throw new Error("Podatkov o OI in volumnu ni bilo mogoče naložiti.");
-      ok.forEach(function(c){ c.m = evalCand(c, futPer); });
+      ok.forEach(function(c){ c.m = evalCand(c, futPer); }); lastFutOk = ok;
       var passed = ok.filter(function(c){ return passCond(c.m); })
         .sort(function(a, b){ return (b.m.vx || 0) - (a.m.vx || 0); });
       var ranked = passed.slice(0, 10), near = false;
@@ -2106,6 +2034,132 @@ $("minliq").addEventListener("change", function(){
   renderGainers();
   if (gTab === "15m") compute15();
 });
+
+async function fetchTradesMulti(chainKey, list, tokenAddr){
+  var pools = [], seen = {};
+  list.forEach(function(p){ if (p.pairAddress && !seen[p.pairAddress] && pools.length < 3) { seen[p.pairAddress] = 1; pools.push(p); } });
+  var res = await Promise.all(pools.map(function(p){
+    return fetchTrades(chainKey, p.pairAddress, tokenAddr).then(function(t){ return {p: p, t: t, ok: true}; }, function(e){ return {p: p, t: [], ok: false, err: e.message}; });
+  }));
+  var okp = res.filter(function(r){ return r.ok && r.t.length; });
+  if (!okp.length) throw new Error(res[0] && res[0].err ? res[0].err : "Ni trgovanj.");
+  var tmin = function(r){ return Math.min.apply(null, r.t.map(function(x){ return x.t; })); };
+  var sat = okp.filter(function(r){ return r.t.length >= 280; });
+  var start = sat.length ? Math.max.apply(null, sat.map(tmin)) : Math.min.apply(null, okp.map(tmin));
+  var all = [], ids = {};
+  okp.forEach(function(r){ r.t.forEach(function(x){
+    var k = x.w + "|" + x.blk + "|" + x.t + "|" + x.kind + "|" + x.vol;
+    if (ids[k] || x.t < start) return;
+    ids[k] = 1; x.pl = r.p.pairAddress; all.push(x);
+  }); });
+  return {trades: all, pools: okp.length, tried: pools.length, start: start};
+}
+function covHtml(){
+  if (!lastAn || !lastCov) return "";
+  var an = lastAn, d = (an.t1 - an.t0) / 60000;
+  var dur = d < 90 ? Math.max(1, Math.round(d)) + " min" : Math.floor(d / 60) + " h " + Math.round(d % 60) + " min";
+  var f = function(t){ return new Date(t).toLocaleString("sl-SI", {day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit"}); };
+  return '<div class="msg" style="margin:0 0 8px"><b>Zajeto:</b> ' + an.n + ' trgovanj · ' + lastCov.pools + ' od ' + lastCov.tried + ' bazenov<br>' +
+    esc(f(an.t0) + ' – ' + f(an.t1) + ' (' + dur + ')') + ' · skupaj ' + esc(usd(an.total)) + '<div id="flowwarn" class="stat" style="margin-top:4px"></div></div>';
+}
+function updateWarn(){
+  var el = $("flowwarn"), inp = $("twin");
+  if (!el || !lastAn) return;
+  var m = inp && inp.value.match(/(\d{1,2}):(\d{2})\s*[-–]\s*(\d{1,2}):(\d{2})/);
+  if (!m) { el.textContent = (lastAn.t1 - lastAn.t0 < 6 * 3600000) ? "Okno je krajše od 6 h. Starejša trgovanja poglej prek povezav spodaj." : ""; return; }
+  var now = new Date(), st = new Date(now);
+  st.setHours(+m[1], +m[2], 0, 0);
+  if (st > now) st.setDate(st.getDate() - 1);
+  var ok = lastAn.t0 <= st.getTime(), lab = inp.value.trim();
+  el.innerHTML = ok ? 'Okno pokriva ' + esc(lab) + '.' : '<span class="thin">⚠ Ne pokriva ' + esc(lab) + '. Zajeto okno se začne ob ' + esc(hhmm(lastAn.t0)) + '.</span>';
+}
+function deepLinks(addr, chainKey, list){
+  var c = CHAINS[chainKey], l = [];
+  list.slice(0, 3).forEach(function(p, i){
+    if (p.pairAddress) l.push(["DEXScreener bazen " + (i + 1) + " (" + (p.dexId || "") + ")", "https://dexscreener.com/" + encodeURIComponent(chainKey) + "/" + encodeURIComponent(p.pairAddress)]);
+  });
+  if (c) {
+    if (chainKey === "solana") l.push(["Prenosi (Solscan)", c.scan + "/token/" + encodeURIComponent(addr) + "#transfers"]);
+    else l.push(["Prenosi žetona s časi", c.scan + "/token/generic-tokentxns2?contractAddress=" + encodeURIComponent(addr)]);
+    l.push(["Imetniki", c.scan + "/token/" + encodeURIComponent(addr) + (chainKey === "solana" ? "#holders" : "#balances")]);
+    var bm = {bsc: "bsc", ethereum: "eth", base: "base", solana: "solana", arbitrum: "arbitrum", polygon: "polygon"}[chainKey];
+    if (bm) l.push(["Bubblemaps (nepreverjeno)", "https://app.bubblemaps.io/" + bm + "/token/" + encodeURIComponent(addr)]);
+  }
+  return '<h2>Za poglobitev</h2>' + note('Zgodovina trgovanj in denarnic izven zajetega okna. Odpri v brskalniku, podatke mi pošlji kot posnetek ali besedilo.') +
+    '<div class="links">' + l.map(function(x){ return '<a href="' + esc(x[1]) + '" target="_blank" rel="noopener">' + esc(x[0]) + '</a>'; }).join("") + '</div>';
+}
+function txt(el){
+  if (!el) return "";
+  var ds = Array.prototype.slice.call(el.querySelectorAll("details")), was = ds.map(function(d){ return d.open; });
+  ds.forEach(function(d){ d.open = true; });
+  var t = el.innerText || "";
+  ds.forEach(function(d, i){ d.open = was[i]; });
+  return t.replace(/ⓘ/g, "").replace(/\n{3,}/g, "\n\n").trim();
+}
+function copyText(t, msg){
+  var done = function(){ $("cpmsg").textContent = msg + " (" + Math.round(t.length / 1000) + " K znakov)"; };
+  var fb = function(){
+    var ta = document.createElement("textarea");
+    ta.value = t; ta.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); done(); } catch (e) { $("cpmsg").textContent = "Kopiranje ni uspelo."; }
+    document.body.removeChild(ta);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, fb); else fb();
+}
+function coinText(){
+  var out = $("out");
+  if (!out || !out.dataset.sym || !lastAddr) return null;
+  var f = function(t){ return new Date(t).toLocaleString("sl-SI"); };
+  var s = "=== PODATKI ŽETONA: " + out.dataset.sym + " (" + out.dataset.chain + ") ===\nNaslov: " + lastAddr + "\nČas kopiranja: " + f(Date.now()) + "\n\n" + txt(out);
+  if (lastAn) {
+    var an = lastAn;
+    s += "\n\n=== SUROVA TRGOVANJA ===\nOkno: " + f(an.t0) + " – " + f(an.t1) + ", " + an.n + " trgovanj\n\nTop 15 denarnic po prometu (naslov | razred | št. | nakupi | prodaje | razlogi):\n";
+    an.wl.slice().sort(function(a, b){ return b.vol - a.vol; }).slice(0, 15).forEach(function(w){
+      s += w.addr + " | " + w.cls + " | " + w.n + " | " + usd(w.buy) + " | " + usd(w.sell) + " | " + w.reasons.join(", ") + "\n";
+    });
+    s += "\n10 največjih trgovanj (ura | smer | znesek | denarnica):\n";
+    lastTr.slice().sort(function(a, b){ return b.vol - a.vol; }).slice(0, 10).forEach(function(x){
+      s += hhmm(x.t) + " | " + (x.kind === "buy" ? "nakup" : "prodaja") + " | " + usd(x.vol) + " | " + x.w + "\n";
+    });
+    var bk = {};
+    lastTr.forEach(function(x){ var k = Math.floor(x.t / 300000), b = bk[k] || (bk[k] = {b: 0, s: 0, n: 0}); if (x.kind === "buy") b.b += x.vol; else b.s += x.vol; b.n++; });
+    s += "\nPromet po 5 min (ura | nakupi | prodaje | št.):\n";
+    Object.keys(bk).map(Number).sort(function(a, b){ return a - b; }).slice(-80).forEach(function(k){
+      s += hhmm(k * 300000) + " | " + usd(bk[k].b) + " | " + usd(bk[k].s) + " | " + bk[k].n + "\n";
+    });
+  }
+  return s;
+}
+function otherText(){
+  var s = "=== OSTALI PODATKI APLIKACIJE ===\nČas: " + new Date().toLocaleString("sl-SI") + "\n\n";
+  s += "--- Največji rastoči (Alpha), zavihek " + gTab + " ---\n" + txt($("gainers")) + "\n\n";
+  s += "--- Vsi Alpha žetoni (likvidnost ≥ nastavitev; sym | veriga | likv | promet 24 h | 5 min | 1 h | 6 h | 24 h) ---\n";
+  visibleRows().slice().sort(function(a, b){ return (b.h1 || -1e9) - (a.h1 || -1e9); }).slice(0, 100).forEach(function(r){
+    s += [r.sym, r.chain, usd(r.liq), usd(r.vol), sgn(r.m5), sgn(r.h1), sgn(r.h6), sgn(r.h24)].join(" | ") + "\n";
+  });
+  s += "\n--- Futures panel (" + futScope + ", " + futPer + ") ---\n" + txt($("futlist")) + "\n" + $("fstatus").textContent + "\n\n";
+  s += "--- Vsi pregledani futures kovanci (kovanec | vol x | OI | cena | stanje) ---\n";
+  lastFutOk.forEach(function(c){
+    var m = c.m || {};
+    s += [c.label, m.vx != null ? fr(m.vx) + "x" : "–", sgn(m.oc), sgn(m.pc), m.st ? m.st.s : "–"].join(" | ") + "\n";
+  });
+  s += "\n--- Signali (skupine) ---\n" + txt($("sigbox")) + "\n\n--- Vsi signali (kovanec | okno | stanje | čas | cena | vol | OI | cena% | funding | izid 15m/1h/3h) ---\n";
+  loadSigs().forEach(function(x){
+    s += [x.label, x.per, x.st, new Date(x.t).toLocaleString("sl-SI"), price(x.p0), fr(x.vx) + "x", sgn(x.oc), sgn(x.pc), x.fund == null ? "–" : fr3(x.fund * 100) + " %",
+      ["15m", "1h", "3h"].map(function(k){ var v = x.o && x.o[k]; return typeof v === "number" ? sgn(v) : "…"; }).join("/")].join(" | ") + "\n";
+  });
+  s += "\n--- Opozorila ---\n" + alertLog.map(function(a){ return a.time + " " + a.sym + " " + a.rest; }).join("\n");
+  s += "\n\n--- Moj seznam ---\n" + loadWatch().map(function(w){ return (w.sym || "") + " " + w.addr; }).join("\n");
+  s += "\n\n--- Nastavitve ---\n" + JSON.stringify(settings) + "\n";
+  return s;
+}
+$("cpcoin").addEventListener("click", function(){
+  var t = coinText();
+  if (!t) { $("cpmsg").textContent = "Najprej preveri žeton."; return; }
+  copyText(t, "Kopirano: podatki žetona");
+});
+$("cpother").addEventListener("click", function(){ copyText(otherText(), "Kopirano: ostali podatki"); });
+$("twin").addEventListener("input", updateWarn);
 loadSettings();
 $("thr").value = settings.thr;
 $("minliq").value = String(settings.minLiq);
