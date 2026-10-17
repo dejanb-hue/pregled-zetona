@@ -242,6 +242,12 @@ var CHAINS = {
 };
 
 var $ = function(id){return document.getElementById(id);};
+var rawFetch = window.fetch.bind(window);
+function fetch(url, opt){
+  var c = new AbortController(), t = setTimeout(function(){ c.abort(); }, 20000);
+  opt = opt || {}; opt.signal = c.signal;
+  return rawFetch(url, opt).finally(function(){ clearTimeout(t); });
+}
 var lastAddr = ""; var lastAn = null, lastTr = [], lastCov = null, lastFutOk = [];
 var runCounter = 0, curPair = null, curChain = "", candleCache = {};
 
@@ -1059,9 +1065,10 @@ $("save").addEventListener("click", function(){
 var ALPHA_LIST_URL = "https://www.binance.com/bapi/defi/v1/public/wallet-direct/buw/wallet/cex/alpha/all/token/list";
 var ALPHA_KL_URL = "https://www.binance.com/bapi/defi/v1/public/alpha-trade/klines";
 var DX_CHAIN = {"56":"bsc","1":"ethereum","8453":"base","42161":"arbitrum","137":"polygon","CT_501":"solana","10":"optimism","43114":"avalanche"};
+var gBusyAt = 0, fBusyAt = 0, lastAlphaAt = 0, lastFutAt = 0, wd = null;
 var alphaTokens = null, alphaAt = 0, gRows = [], gTab = "15m", gBusy = false, k15Busy = false, gTimer = null;
 var alerted = {}, alertLog = [], audioCtx = null, wakeLock = null, k15Fail = false;
-var settings = {thr: 10, minLiq: 10000, oiThr: 3, tkThr: 3, volX: 2, oiMin: 2, cond: "both", tf: {amt: 100, stop: 5, tgt: 10, fee: 0.25}};
+var settings = {auto: false, thr: 10, minLiq: 10000, oiThr: 3, tkThr: 3, volX: 2, oiMin: 2, cond: "both", tf: {amt: 100, stop: 5, tgt: 10, fee: 0.25}};
 
 function loadSettings(){
   try {
@@ -1073,6 +1080,7 @@ function loadSettings(){
     if (num(o.volX) != null && o.volX > 0) settings.volX = num(o.volX);
     if (num(o.oiMin) != null && o.oiMin > 0) settings.oiMin = num(o.oiMin);
     if (o.cond === "both" || o.cond === "any" || o.cond === "none") settings.cond = o.cond;
+    if (typeof o.auto === "boolean") settings.auto = o.auto;
     if (o.tf && typeof o.tf === "object") ["amt", "stop", "tgt", "fee"].forEach(function(k){ if (num(o.tf[k]) != null && o.tf[k] >= 0) settings.tf[k] = num(o.tf[k]); });
   } catch (e) {}
 }
@@ -1108,7 +1116,7 @@ async function getAlphaTokens(){
 
 async function scanAlpha(){
   if (gBusy) return;
-  gBusy = true;
+  gBusy = true; gBusyAt = Date.now();
   setStatus("Nalagam…");
   try {
     var toks = await getAlphaTokens();
@@ -1167,7 +1175,7 @@ async function scanAlpha(){
            : esc(e.message)) + '</div>';
     setStatus("Napaka");
   }
-  gBusy = false;
+  gBusy = false; lastAlphaAt = Date.now();
 }
 
 function visibleRows(){
@@ -1582,7 +1590,7 @@ function renderSigs(){
 
 async function scanFut(){
   if (futBusy) { futPending = true; return; }
-  futBusy = true;
+  futBusy = true; fBusyAt = Date.now();
   var box = $("futlist");
   $("fstatus").textContent = "Nalagam…";
   try {
@@ -1645,7 +1653,7 @@ async function scanFut(){
       (e instanceof TypeError ? "Futures podatkov ni bilo mogoče naložiti. Binance morda ne dovoli branja iz brskalnika. Pošlji mi posnetek in poiščeva drugo pot." : esc(e.message)) + '</div>';
     $("fstatus").textContent = "Napaka";
   }
-  futBusy = false;
+  futBusy = false; lastFutAt = Date.now();
   if (futPending) { futPending = false; scanFut(); }
 }
 
@@ -1867,10 +1875,20 @@ async function setWake(on){
     } else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
   } catch (e) { wakeLock = null; }
 }
+function watchdog(){
+  if (!$("auto").checked) return;
+  var now = Date.now();
+  if (gBusy && now - gBusyAt > 60000) gBusy = false;
+  if (futBusy && now - fBusyAt > 120000) { futBusy = false; futPending = false; }
+  if (!gBusy && now - Math.max(lastAlphaAt, gBusyAt) > 75000) scanAlpha();
+  if (!futBusy && now - Math.max(lastFutAt, fBusyAt) > 150000) scanFut();
+}
 function setAuto(on){
+  if (wd) { clearInterval(wd); wd = null; }
   if (gTimer) { clearInterval(gTimer); gTimer = null; }
   if (fTimer) { clearInterval(fTimer); fTimer = null; }
   if (on) {
+    wd = setInterval(watchdog, 15000);
     try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.resume) audioCtx.resume(); } catch (e) {}
     try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch (e) {}
     gTimer = setInterval(scanAlpha, 30000);
@@ -1881,7 +1899,7 @@ function setAuto(on){
 }
 
 document.addEventListener("visibilitychange", function(){
-  if (document.visibilityState === "visible" && $("auto").checked) { setWake(true); scanAlpha(); }
+  if (document.visibilityState === "visible" && $("auto").checked) { setWake(true); scanAlpha(); scanFut(); }
 });
 document.addEventListener("click", function(e){
   var t = e.target;
@@ -2037,7 +2055,8 @@ $("oithr").addEventListener("change", function(){
   this.value = settings.oiThr;
   saveSettings();
 });
-$("auto").addEventListener("change", function(){ setAuto(this.checked); });
+$("auto").addEventListener("change", function(){ settings.auto = this.checked; saveSettings(); setAuto(this.checked); });
+document.addEventListener("click", function(){ try { if (audioCtx && audioCtx.state === "suspended") audioCtx.resume(); } catch (e) {} });
 $("thr").addEventListener("change", function(){
   var v = num(this.value.replace(",", "."));
   settings.thr = (v && v > 0) ? v : 10;
@@ -2288,7 +2307,9 @@ $("trclear").addEventListener("click", function(){
   renderTrend();
 });
 renderSigs(); renderTrend();
+$("auto").checked = settings.auto;
 scanAlpha().then(scanFut);
+if (settings.auto) setAuto(true);
 
 try {
   var last = localStorage.getItem("ct_last");
