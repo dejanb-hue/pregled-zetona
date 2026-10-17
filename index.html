@@ -2130,6 +2130,37 @@ function coinText(){
   }
   return s;
 }
+async function futText(){
+  var out = $("out"), sym = out.dataset.sym, h = "\n\n=== FUTURES: " + sym + " ===\n";
+  if (!curTF) return "";
+  try {
+    var info = await getFutInfo(), ticks = await getTicks();
+    var e = matchFut({sym: sym, price: curTF.price}, info, ticks);
+    if (!e) return h + "Ni para na Binance Futures (ali cena ni skladna s futures parom).\n";
+    var oi = await getOI(e.symbol), rest = (await getRest(e.symbol)) || {}, kl = null, pr = null;
+    try { kl = await getKl(e.symbol); } catch (x) {}
+    try { pr = (await getPremium())[e.symbol]; } catch (x) {}
+    var t = ticks[e.symbol] || {}, P5 = ["5m", "15m", "1h", "3h", "6h"];
+    var rI = function(r){ return r ? fr(r.now) + (r.lp != null ? " (long " + pct(r.lp * 100, 0) + ")" : "") + " · 15 min " + fr(r.r15) + " · 1 h " + fr(r.r1h) + " · 3 h " + fr(r.r3h) : "–"; };
+    var r = h + "Par: " + e.symbol + " · cena " + price(t.price) + " · 24 h " + sgn(t.chg) + " · promet 24 h " + usd(t.qv) + "\n";
+    r += "Funding: " + (pr && pr.fund != null ? fr3(pr.fund * 100) + " %" : "–") + "\n";
+    r += "OI (količina; velikost " + usd(oi && oi.val) + "): " + P5.map(function(k){ return TFL[k] + " " + sgn(oiBy(oi, k)); }).join(" · ") + "\n";
+    if (kl) {
+      r += "Cena futures: " + P5.map(function(k){ return TFL[k] + " " + sgn(kl.px[k]); }).join(" · ") + "\n";
+      r += "Futures promet (USDT): " + ["15m", "1h", "3h", "6h"].map(function(k){ var w = kl.vol[k]; return TFL[k] + " " + usd(w && w.v) + (w && w.x != null ? " (" + fr(w.x) + "x)" : ""); }).join(" · ") + "\n";
+      r += "Stanje: " + ["15m", "1h", "3h"].map(function(k){ var st = stateOf(kl.px[k], oiBy(oi, k)); return TFL[k] + " " + (st ? st.s : "–"); }).join(" · ") + "\n";
+    }
+    r += "L/S računi: " + rI(rest.gl) + "\nL/S top traderji (računi): " + rI(rest.topA) + "\nL/S top traderji (pozicije): " + rI(rest.top) + "\n";
+    var tk = rest.tk;
+    r += "Taker nakupi/prodaje: " + (tk ? "5 min " + fr(tk.r5) + " · 15 min " + fr(tk.r15) + " · 1 h " + fr(tk.r1h) + " · 3 h " + fr(tk.r3h) + (tk.spike ? " · skok prometa " + fr(tk.spike.x) + "x (nak./prod. " + fr(tk.spike.ratio) + ")" : "") : "–") + "\n";
+    var sg = loadSigs().filter(function(x){ return x.sym === e.symbol; });
+    r += "Zabeleženi signali za ta kovanec: " + (sg.length ? "" : "ni") + "\n";
+    sg.forEach(function(x){
+      r += [new Date(x.t).toLocaleString("sl-SI"), x.per, x.st, "cena " + price(x.p0), "vol " + fr(x.vx) + "x", "OI " + sgn(x.oc), "izid 15m/1h/3h " + ["15m", "1h", "3h"].map(function(k){ var v = x.o && x.o[k]; return typeof v === "number" ? sgn(v) : "…"; }).join("/")].join(" | ") + "\n";
+    });
+    return r;
+  } catch (err) { return h + "Futures podatkov ni bilo mogoče naložiti: " + err.message + "\n"; }
+}
 function otherText(){
   var s = "=== OSTALI PODATKI APLIKACIJE ===\nČas: " + new Date().toLocaleString("sl-SI") + "\n\n";
   s += "--- Največji rastoči (Alpha), zavihek " + gTab + " ---\n" + txt($("gainers")) + "\n\n";
@@ -2153,10 +2184,12 @@ function otherText(){
   s += "\n\n--- Nastavitve ---\n" + JSON.stringify(settings) + "\n";
   return s;
 }
-$("cpcoin").addEventListener("click", function(){
+$("cpcoin").addEventListener("click", async function(){
   var t = coinText();
   if (!t) { $("cpmsg").textContent = "Najprej preveri žeton."; return; }
-  copyText(t, "Kopirano: podatki žetona");
+  $("cpmsg").textContent = "Zbiram futures podatke…";
+  t += await futText();
+  copyText(t, "Kopirano: podatki žetona + futures");
 });
 $("cpother").addEventListener("click", function(){ copyText(otherText(), "Kopirano: ostali podatki"); });
 $("twin").addEventListener("input", updateWarn);
