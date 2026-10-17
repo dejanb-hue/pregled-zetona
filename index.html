@@ -199,6 +199,11 @@ details.frow[open] summary{margin-bottom:4px}
   </div>
   <p class="stat">Signal se zabeleži, ko kovanec v 15-min ali 1-urnem oknu izpolni oba pogoja (rast volumna in sprememba OI), največ enkrat na uro. Izid je sprememba futures cene po 15 min, 1 h in 3 h. Brez provizij in zdrsa, vzorec je majhen, zato ni dokaz.</p>
 
+  <h2>Trend zadnja ura<span class="info" role="button" tabindex="0" data-info="sec_trend" aria-label="Razlaga">ⓘ</span></h2>
+  <p class="note">Vsak stolpec je 15-min obdobje do ure v glavi. Podatki so iz posnetkov, ki se shranijo v tej napravi ob osveževanju futures panela (največ enkrat na 5 min na kovanec).</p>
+  <div class="row" style="align-items:center"><select id="trsym" style="flex:1;min-width:0;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit;font-size:16px"></select><button class="ghost small" id="trclear">Počisti</button></div>
+  <div class="card" id="trbox" style="overflow-x:auto;margin-top:8px"></div>
+
   <h2>Preveri žeton<span class="info" role="button" tabindex="0" data-info="sec_check" aria-label="Razlaga">ⓘ</span></h2>
   <p class="note">Prilepi naslov pogodbe, veriga se zazna sama. Viri: DEXScreener (trg), GoPlus (varnost), GeckoTerminal (svečke in trgovanja).</p>
   <div class="row">
@@ -251,6 +256,7 @@ var INFO = {
   sec_settings: ["Nastavitve in opozorila", "Nastavitve se shranijo v brskalnik te naprave. Opozorila (rast cene, skok OI, taker promet, novi signali) delujejo samo ob vklopljenem samodejnem osveževanju in odprti strani. Zvok in vibracija se sprožita ob vsakem opozorilu, isti kovanec se ne javi znova 15 minut."],
   sec_futures: ["Futures · Binance", "Javni podatki Binance Futures. Pregleda do 40 kovancev: pri »Alpha z futures« tiste Alpha žetone, ki imajo futures par (povezava po simbolu in ceni, 1000PEPE velja za PEPE), pri »Vsi futures« 30 največjih po prometu in 15 največjih gibalcev.\nZa izbrano obdobje (15 min, 1 ura, 3 ure) izračuna rast futures prometa, spremembo OI v količini in spremembo cene iz svečk.\nPrikaže do 10 kovancev, ki izpolnjujejo pogoje iz nastavitev, razvrščenih po rasti volumna. Ni napoved cene."],
   sec_signals: ["Beleženje signalov", "Signal = kovanec je v 15-min ali 1-urnem oknu hkrati presegel prag rasti volumna in spremembe OI (nastavitve) in ima jasno stanje (ne »brez signala«). Največ en signal na kovanec in okno na uro.\nIzid = sprememba futures cene od trenutka signala po 15 min, 1 h in 3 h, brez provizij in zdrsa. Izidi se dopolnijo tudi, ko je bila stran zaprta.\nTapni skupino ali signal za podrobnosti (kovanec, cena, OI, volumen, funding). Shranjeno v brskalniku te naprave. Majhen vzorec ni dokaz."],
+  sec_trend: ["Trend zadnja ura", "Posnetki futures podatkov (cena, OI v količini, promet, taker, L/S, funding) se shranijo ob osveževanju futures panela, največ enkrat na 5 min na kovanec, in se hranijo 24 h v tej napravi. Vsak stolpec kaže 15-min obdobje do navedene ure. Taker in L/S sta samo za kovance, ki so bili v top 10 panela. Posnetki se zapisujejo samo, ko je stran odprta."],
   sec_check: ["Preveri žeton", "Prilepi naslov pogodbe. DEXScreener najde pare in izbere tistega z največ likvidnosti, veriga se zazna sama. Viri: DEXScreener (cene, likvidnost, promet), GoPlus (varnost pogodbe, EVM), GeckoTerminal (svečke in zadnja trgovanja). Pregled ni napoved cene."],
   sec_gibanje: ["Gibanje", "Sprememba cene je z glavnega para (DEXScreener). Promet in število nakupov/prodaj sta seštevek vseh parov žetona. Vrstica 15 min je izračunana iz svečk GeckoTerminal glavnega para, zato je približna.\nGraf kaže zadnjih 60 svečk po 5 min, 15 min ali 1 uro, pod njimi je promet."],
   sec_okvir: ["Okvir trejda", "Izračun za razmislek, ne priporočilo. Vneseš znesek, stop, cilj in provizijo.\nZdrs je ocena po formuli za klasičen bazen: znesek proti polovici likvidnosti glavnega para. Pri V3 bazenih je dejanski zdrs lahko manjši. Strošek kroga = 2 × provizija + 2 × zdrs. Cena in likvidnost sta z DEXScreenerja."],
@@ -1624,6 +1630,7 @@ async function scanFut(){
         near = ranked.length > 0;
       }
       await pool(ranked, 5, async function(c){ c.rest = await getRest(c.sym); });
+      logHist(ok, ticks, prem);
       var added = logSignals(ok, ticks, prem);
       checkFutAlerts(ok);
       checkTakerAlerts(near ? [] : ranked);
@@ -1631,7 +1638,7 @@ async function scanFut(){
       renderFut(ranked, ticks, prem, ok, near);
       $("fstatus").textContent = ok.length + " pregledanih · " + new Date().toLocaleTimeString("sl-SI");
       try { await resolveSigs(); } catch (e3) {}
-      renderSigs();
+      renderSigs(); renderTrend();
     }
   } catch (e) {
     box.innerHTML = '<div class="msg err" style="margin:8px 0">' +
@@ -1943,7 +1950,7 @@ function ioShow(mode){
   $("iomsg").textContent = "";
   if (mode === "exp") {
     var sg = loadSigs(), wt = loadWatch();
-    ta.value = JSON.stringify({v: 1, sig: sg, watch: wt});
+    ta.value = JSON.stringify({v: 1, sig: sg, watch: wt, hist: loadHist()});
     ta.readOnly = true;
     $("iocopy").hidden = false; $("iodo").hidden = true;
     $("iomsg").textContent = "Izvoženo: " + sigWord(sg.length) + " in " + wt.length + " v seznamu. Tapni Kopiraj in besedilo shrani (npr. v zapiske).";
@@ -1988,7 +1995,16 @@ function ioImport(){
       w.push({addr: String(x.addr), sym: String(x.sym || "")}); addW++;
     });
     saveWatch(w);
-    renderSigs(); renderWatch();
+    var hi = (o.hist && typeof o.hist === "object") ? o.hist : {}, hc = loadHist();
+    Object.keys(hi).forEach(function(k){
+      if (!Array.isArray(hi[k])) return;
+      var have = {}, a = hc[k] || (hc[k] = []);
+      a.forEach(function(x){ have[x.t] = 1; });
+      hi[k].forEach(function(x){ if (x && isFinite(x.t) && isFinite(x.px) && !have[x.t]) { a.push(x); have[x.t] = 1; } });
+      a.sort(function(p, q){ return p.t - q.t; });
+    });
+    saveHist(hc);
+    renderSigs(); renderWatch(); renderTrend();
     $("iomsg").textContent = "Dodano: " + sigWord(addS) + " in " + addW + " v seznam. Obstoječi zapisi so ostali. Največ 300 signalov se hrani.";
   } catch (e) {
     $("iomsg").textContent = "Neveljavni podatki. Prilepi celotno izvoženo besedilo.";
@@ -2158,6 +2174,12 @@ async function futText(){
     sg.forEach(function(x){
       r += [new Date(x.t).toLocaleString("sl-SI"), x.per, x.st, "cena " + price(x.p0), "vol " + fr(x.vx) + "x", "OI " + sgn(x.oc), "izid 15m/1h/3h " + ["15m", "1h", "3h"].map(function(k){ var v = x.o && x.o[k]; return typeof v === "number" ? sgn(v) : "…"; }).join("/")].join(" | ") + "\n";
     });
+    var hs = (loadHist()[e.symbol] || []).filter(function(x){ return x.t > Date.now() - 3 * 3600000; });
+    r += "Zgodovina posnetkov, zadnje 3 h (ura | cena | cena 15 min | OI 15 min | vol x | promet 15 min | taker 15 min | L/S | funding):\n";
+    hs.forEach(function(x){
+      r += [hhmm(x.t), price(x.px), sgn(x.p15), sgn(x.o15), fr(x.vx), x.vv == null ? "–" : usd(x.vv), fr(x.tk), fr(x.ls), x.f == null ? "–" : fr3(x.f) + " %"].join(" | ") + "\n";
+    });
+    if (!hs.length) r += "ni posnetkov\n";
     return r;
   } catch (err) { return h + "Futures podatkov ni bilo mogoče naložiti: " + err.message + "\n"; }
 }
@@ -2201,7 +2223,71 @@ $("tkthr").value = settings.tkThr;
 $("fcond").value = settings.cond;
 $("volx").value = settings.volX;
 $("oimin").value = settings.oiMin;
-renderSigs();
+var HIST_KEY = "ct_hist";
+function loadHist(){ try { return JSON.parse(localStorage.getItem(HIST_KEY) || "{}"); } catch (e) { return {}; } }
+function saveHist(h){
+  try { localStorage.setItem(HIST_KEY, JSON.stringify(h)); }
+  catch (e) {
+    Object.keys(h).forEach(function(k){ h[k] = h[k].slice(-72); });
+    try { localStorage.setItem(HIST_KEY, JSON.stringify(h)); } catch (e2) {}
+  }
+}
+function r2(v, d){ return (v == null || !isFinite(v)) ? null : Math.round(v * d) / d; }
+function logHist(cands, ticks, prem){
+  var h = loadHist(), now = Date.now(), cut = now - 24 * 3600000, n = 0;
+  cands.forEach(function(c){
+    var tk = ticks[c.sym];
+    if (!tk || !tk.price || !c.oi || !c.kl) return;
+    var a = h[c.sym] || (h[c.sym] = []), last = a[a.length - 1];
+    if (last && now - last.t < 270000) return;
+    var w = c.kl.vol["15m"], pr = prem && prem[c.sym], rs = c.rest || {};
+    a.push({t: now, px: tk.price, p15: r2(c.kl.px["15m"], 100), o15: r2(c.oi.c15, 100), vx: r2(w && w.x, 100),
+      vv: (w && w.v != null) ? Math.round(w.v) : null, f: (pr && pr.fund != null) ? r2(pr.fund * 100, 1000) : null,
+      ls: rs.gl ? r2(rs.gl.now, 100) : null, tk: rs.tk ? r2(rs.tk.r15, 100) : null});
+    h[c.sym] = a.filter(function(x){ return x.t > cut; }); n++;
+  });
+  if (n) saveHist(h);
+}
+function renderTrend(){
+  var box = $("trbox"), sel = $("trsym");
+  if (!box || !sel) return;
+  var h = loadHist(), keys = Object.keys(h).filter(function(k){ return h[k].length; }).sort();
+  var cur = sel.value;
+  sel.innerHTML = keys.map(function(k){ return '<option value="' + esc(k) + '">' + esc(k) + ' (' + h[k].length + ')</option>'; }).join("");
+  if (!keys.length) { box.innerHTML = '<div class="loading">Še ni posnetkov. Zapišejo se ob osveževanju futures panela (največ vsakih 5 min na kovanec).</div>'; return; }
+  var viewed = (($("out").dataset.sym || "").toUpperCase() + "USDT");
+  var want = (cur && h[cur]) ? cur : (h[viewed] ? viewed : keys[0]);
+  sel.value = want;
+  var a = h[want], lastT = a[a.length - 1].t;
+  var cols = [45, 30, 15, 0].map(function(m){
+    var tg = lastT - m * 60000, best = null, bd = 1e12;
+    a.forEach(function(x){ var d = Math.abs(x.t - tg); if (d < bd) { bd = d; best = x; } });
+    return bd <= 240000 ? best : null;
+  });
+  var cs = function(v){ return v == null ? "–" : '<span class="' + (v < 0 ? "down" : "up") + '">' + esc(sgn(v)) + '</span>'; };
+  var row = function(label, f){
+    return '<tr><td>' + label + '</td>' + cols.map(function(c){ return '<td>' + (c ? f(c) : "–") + '</td>'; }).join("") + '</tr>';
+  };
+  var head = cols.map(function(c, i){ return '<th>' + (i === 3 ? "zdaj" : (c ? hhmm(c.t) : "–")) + '</th>'; }).join("");
+  box.innerHTML = '<table class="pairs"><thead><tr><th></th>' + head + '</tr></thead><tbody>' +
+    row("Cena 15 min", function(c){ return cs(c.p15); }) +
+    row("OI (količina)", function(c){ return cs(c.o15); }) +
+    row("Stanje", function(c){ var st = stateOf(c.p15, c.o15); return esc(st ? st.s : "–"); }) +
+    row("Promet (x)", function(c){ return esc(fr(c.vx)); }) +
+    row("Promet USDT", function(c){ return c.vv == null ? "–" : esc(usd(c.vv)); }) +
+    row("Taker", function(c){ return esc(fr(c.tk)); }) +
+    row("L/S računi", function(c){ return esc(fr(c.ls)); }) +
+    row("Funding", function(c){ return c.f == null ? "–" : esc(fr3(c.f)) + " %"; }) +
+    row("Cena", function(c){ return esc(price(c.px)); }) +
+    '</tbody></table><div class="cap">Zadnji posnetek: ' + esc(new Date(lastT).toLocaleString("sl-SI")) + '. Taker in L/S sta samo za kovance iz top 10 panela. Zapisuje se samo ob odprti strani.</div>';
+}
+$("trsym").addEventListener("change", renderTrend);
+$("trclear").addEventListener("click", function(){
+  if (typeof confirm === "function" && !confirm("Počistim vse shranjene posnetke?")) return;
+  try { localStorage.removeItem(HIST_KEY); } catch (e) {}
+  renderTrend();
+});
+renderSigs(); renderTrend();
 scanAlpha().then(scanFut);
 
 try {
