@@ -290,6 +290,7 @@ var INFO = {
   sec_flow: ["Promet po vrsti trgovcev", "Zadnjih ~300 trgovanj glavnega para (GeckoTerminal), razvrščenih po denarnici, ki je trgovanje sprožila.\nBot: veliko trgovanj, enake velikosti, hiter ritem ali nakup in prodaja v istem bloku. Kit: trgovanje nad večjim od $2K in 1 % likvidnosti (če ni bot). Normalen: ostali.\nTo je ocena po pravilih, ne dokaz. Lovci na Alpha točke so pogosto videti kot boti."],
   sec_holders: ["Top imetniki", "Top 10 imetnikov po GoPlusu, deleži so od skupne ponudbe. Oznaka (npr. borza, bazen) je iz GoPlusa, če obstaja. Povezava odpre transfere denarnice za ta žeton na explorerju.\nStolpec Trgovanja se izpolni samo, če je imetnik sam trgoval prek glavnega bazena v zadnjih ~300 trgovanjih."],
 
+  sec_b15: ["Zadnjih 15 min po 5 min", "Zadnjih 15 minutnih svečk glavnega para (GeckoTerminal), razdeljenih na tri 5-minutna obdobja. Za vsako: sprememba cene od odprtja do zaprtja, promet v USD, delež prometa v teh 15 min in razpon (najvišja proti najnižji ceni).\nPromet je samo glavni par. Nakupov in prodaj v dolarjih ta vir ne daje, kdo je trgoval (kiti, boti) pa tudi ne: to je v razdelku Promet po vrsti trgovcev, ki zajame samo zadnjih ~300 trgovanj.\nZadnja minuta je lahko še tekoča, zato je zadnje obdobje rahlo podcenjeno."],
   set_thr: ["Opozorilo ob rasti cene", "Ko cena Alpha žetona (DEXScreener, glavni par) v 5 min zraste nad ta prag in ima žeton vsaj izbrano likvidnost, se sproži opozorilo (zvok, vibracija, oznaka na vrhu). Isti žeton se ne javi znova 15 min."],
   set_oi: ["Opozorilo ob skoku OI", "Open interest je število odprtih futures pogodb. Če se v 5 min spremeni (v količini, ne v dolarjih) za več kot ta prag, se sproži opozorilo. Preverja do 40 pregledanih futures kovancev."],
   set_tk: ["Opozorilo ob taker prometu", "Taker promet so agresivni tržni nakupi in prodaje. Zadnjo 5-min svečo primerjam s povprečjem prejšnjih 12. Če je X-krat višja, se sproži opozorilo. Velja za top 10 v futures panelu."],
@@ -417,7 +418,9 @@ function age(ms){
 }
 function levelRank(l){return l === "red" ? 2 : l === "amber" ? 1 : 0;}
 
+var sumCat = "", sumCol = [], sumFut = null;
 function metric(label, value, note, level){
+  if (sumCat) sumCol.push({label: label, value: value, level: level || ""});
   return '<div class="metric"><div class="bar ' + (level||"") + '"></div>' +
     '<div class="mlabel">' + esc(label) + infoBtn(INFO_BY_LABEL[label]) + '</div><div class="mval">' + esc(value) + '</div>' +
     (note ? '<div class="mnote">' + esc(note) + '</div>' : '') + '</div>';
@@ -625,7 +628,7 @@ function linkSet(addr, chainKey, pair){
 }
 
 /* ---------- gibanje in graf (GeckoTerminal) ---------- */
-var TF = {"5m":["minute",5,"5 min"], "15m":["minute",15,"15 min"], "1h":["hour",1,"1 uro"]};
+var TF = {"1m":["minute",1,"1 min"], "5m":["minute",5,"5 min"], "15m":["minute",15,"15 min"], "1h":["hour",1,"1 uro"]};
 
 async function fetchCandles(chainKey, pool, tf){
   var c = CHAINS[chainKey];
@@ -935,8 +938,11 @@ async function loadFlow(addr, chainKey, pair, list, gp, myRun){
   }
   var box2 = $("flow");
   if (!box2) return;
+  sumCat = "f";
   box2.innerHTML = (an ? flowHtml(an, chainKey, addr) : '<h2>Promet po vrsti trgovcev' + infoBtn('sec_flow') + '</h2>' + note('Kdo ustvarja promet. Vir: zadnja trgovanja do 3 največjih bazenov (GeckoTerminal), zajeto okno je prikazano spodaj. Razvrstitev je ocena po pravilih.') + '<div class="msg">' + esc(err || "Ni podatkov o trgovanjih.") + '</div>') +
     holdersHtml(gp, an, chainKey, addr) + deepLinks(addr, chainKey, list);
+  sumCat = "";
+  renderSummary();
   updateWarn();
 }
 
@@ -974,13 +980,15 @@ async function run(){
 
   var gtd = null;
   try { gtd = await fetchGT(chainKey, addr); } catch (eg) {}
+  sumCol = []; sumFut = null; sumCat = "m";
   var rows = marketMetrics(p, list, gtd);
+  sumCat = "";
   var secRows = [], secNote = "", gp = null;
   if (chain && chain.id) {
     try {
       var s = await fetchGoPlus(chain.id, addr);
       gp = s;
-      if (s) secRows = securityMetrics(s);
+      if (s) { sumCat = "s"; secRows = securityMetrics(s); sumCat = ""; }
       else secNote = "GoPlus za ta žeton nima podatkov. Odpri GoPlus poročilo spodaj.";
     } catch (e) {
       secNote = "Varnostnih podatkov (GoPlus) ni bilo mogoče naložiti. Odpri poročilo prek povezave spodaj.";
@@ -1010,9 +1018,11 @@ async function run(){
     '<div><div class="price">' + esc(price(num(p.priceUsd))) + '</div>' +
     '<div class="chg ' + (ch != null && ch < 0 ? "down" : "up") + '" style="text-align:right">' + (ch == null ? "" : "24 h: " + esc(pct(ch, 1))) + '</div></div></div>' +
     '<div class="verdict ' + vClass + '"><b>' + esc(vTitle) + '</b><p>' + esc(vText) + '</p></div>' +
+    '<div id="sumbox"></div>' +
     '<h2>Gibanje' + infoBtn('sec_gibanje') + '</h2>' + note('Sprememba cene je z glavnega para (DEXScreener), promet in nakupi/prodaje so seštevek vseh parov. Graf in vrstica 15 min sta iz svečk GeckoTerminal.') + motionTable(p, list) +
     '<div class="tabs" id="tabs"><button data-tf="5m" class="on">5 min</button><button data-tf="15m">15 min</button><button data-tf="1h">1 ura</button></div>' +
     '<div class="card chartbox" id="chart"><div class="loading">Nalagam graf…</div></div>' +
+    '<h2>Zadnjih 15 min po 5 min' + infoBtn('sec_b15') + '</h2>' + note('Promet in cena iz minutnih svečk glavnega para (GeckoTerminal), ne glede na število trgovanj. Ne pove, kdo je trgoval.') + '<div class="card" id="b15" style="overflow-x:auto"><div class="loading">Nalagam…</div></div>' +
     '<h2>Okvir trejda' + infoBtn('sec_okvir') + '</h2>' + note('Izračun za tvoj znesek: zdrs, stroški in razmerje dobiček : tveganje. Podatki: cena in likvidnost glavnega para.') + '<div class="card" id="tframe"></div>' +
     '<h2>Trg</h2>' + note('Razmerja iz DEXScreenerja, likvidnost in promet po potrebi iz GeckoTerminala (večja vrednost). Zeleno = nižje, rumeno = previdnost, rdeče = visoko tveganje. Pragovi so splošna pravila, ne jamstvo.') + '<div class="card">' + rows.join("") + '</div>' +
     '<h2>Varnost pogodbe' + infoBtn('sec_varnost') + '</h2>' + note('GoPlus preveri pogodbo: honeypot, davke, lastništvo, imetnike. Deluje za EVM verige, za Solano uporabi RugCheck.') +
@@ -1026,10 +1036,87 @@ async function run(){
   curTF = {price: num(p.priceUsd), liq: (p.liquidity && num(p.liquidity.usd)) || 0, sym: sym};
   renderTradeFrame();
   fillMotion();
+  renderSummary();
+  load15(myRun);
+  loadFutSum(sym, num(p.priceUsd), myRun);
   loadFlow(addr, chainKey, p, list, gp, myRun);
   try { localStorage.setItem("ct_last", addr); } catch (e) {}
   out.dataset.sym = sym || "";
   out.dataset.chain = chainKey || "";
+}
+
+/* ---------- zadnjih 15 min po 5 min (minutne svečke) ---------- */
+async function load15(my){
+  var box = $("b15");
+  if (!box || !curPair) return;
+  try {
+    var list = await fetchCandles(curChain, curPair.pairAddress, "1m");
+    if (my !== runCounter) return;
+    var c = list.slice(0, 15).reverse();
+    if (c.length < 15) throw new Error("Premalo minutnih svečk (" + c.length + ").");
+    var tot = 0, mx = c[0];
+    c.forEach(function(k){ tot += k[5]; if (k[5] > mx[5]) mx = k; });
+    var rows = [0, 1, 2].map(function(i){
+      var s = c.slice(i * 5, i * 5 + 5), v = 0, hi = -Infinity, lo = Infinity;
+      s.forEach(function(k){ v += k[5]; hi = Math.max(hi, k[2]); lo = Math.min(lo, k[3]); });
+      var o = s[0][1], cl = s[4][4], ch = o > 0 ? (cl / o - 1) * 100 : null;
+      var rg = lo > 0 ? (hi / lo - 1) * 100 : null;
+      return '<tr><td>' + hhmm(s[0][0] * 1000) + '–' + hhmm(s[4][0] * 1000 + 60000) + '</td>' +
+        '<td>' + (ch == null ? "–" : '<span class="' + (ch < 0 ? "down" : "up") + '">' + esc(sgn(ch)) + '</span>') + '</td>' +
+        '<td>' + esc(usd(v)) + '</td><td>' + (tot ? esc(pct(v / tot * 100, 0)) : "–") + '</td><td>' + esc(pct(rg, 1)) + '</td></tr>';
+    }).join("");
+    var all = c[0][1] > 0 ? (c[14][4] / c[0][1] - 1) * 100 : null;
+    box.innerHTML = '<table class="pairs motion"><thead><tr><th>Obdobje</th><th>Cena</th><th>Promet</th><th>Delež</th><th>Razpon</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div class="cap">Skupaj 15 min: ' + esc(sgn(all)) + ' · promet ' + esc(usd(tot)) + ' (samo glavni par). Najbolj prometna minuta: ' + esc(hhmm(mx[0] * 1000)) + ', ' + esc(usd(mx[5])) + '. Zadnja minuta je lahko še tekoča.</div>';
+  } catch (e) {
+    if (my !== runCounter) return;
+    box.innerHTML = '<div class="msg err" style="margin:6px">' + esc(e.message) + '</div>';
+  }
+}
+
+/* ---------- povzetek ---------- */
+function renderSummary(){
+  var box = $("sumbox");
+  if (!box) return;
+  var bad = sumCol.filter(function(x){ return x.level === "red" || x.level === "amber"; })
+    .sort(function(a, b){ return levelRank(b.level) - levelRank(a.level); });
+  var g = sumCol.filter(function(x){ return x.level === "green"; }).length;
+  var h = '<h2>Povzetek</h2><div class="card">';
+  h += bad.length ? bad.map(function(x){ return metric(x.label, x.value, "", x.level); }).join("")
+    : '<div class="loading">Ni rumenih ali rdečih kazalnikov.</div>';
+  if (sumFut === false) h += metric("Futures", "ni para", "Ni para na Binance Futures.", "");
+  else if (sumFut) h += metric(sumFut.label, sumFut.value, sumFut.note, sumFut.level);
+  h += '</div><div class="cap">Izbor opozoril iz razdelkov spodaj. Brez opozorila: ' + g + ' od ' + sumCol.length + ' kazalnikov.' +
+    (sumFut === null ? ' Futures se nalaga…' : '') + ' Ni napoved cene.</div>';
+  box.innerHTML = h;
+}
+async function loadFutSum(sym, px, myRun){
+  var res = false;
+  try {
+    var info = await getFutInfo(), ticks = await getTicks();
+    var e = matchFut({sym: sym, price: px}, info, ticks);
+    if (e) {
+      var oi = null, kl = null, rest = null, pr = null;
+      try { oi = await getOI(e.symbol); } catch (x1) {}
+      try { kl = await getKl(e.symbol); } catch (x2) {}
+      try { rest = await getRest(e.symbol); } catch (x3) {}
+      try { pr = (await getPremium())[e.symbol]; } catch (x4) {}
+      var oc = oiBy(oi, "1h"), pc = kl ? kl.px["1h"] : null, st = stateOf(pc, oc), w = kl && kl.vol["1h"];
+      var fund = pr && pr.fund != null ? pr.fund * 100 : null, lvl = "", parts = [];
+      parts.push("cena " + sgn(pc), "OI " + sgn(oc));
+      if (w && w.x != null) parts.push("vol " + fr(w.x) + "x");
+      if (fund != null) parts.push("funding " + fr3(fund) + " %");
+      if (rest && rest.gl) { parts.push("L/S " + fr(rest.gl.now)); if (rest.gl.now >= 2) lvl = "amber"; }
+      if (rest && rest.tk) parts.push("taker " + fr(rest.tk.r1h));
+      if (fund != null && (fund >= 0.05 || fund <= -0.03)) lvl = "amber";
+      res = {label: "Futures (1 h)", value: st ? st.s : "ni podatka", note: parts.join(" · ") + (lvl ? " · pozor: ekstremen funding ali natrpani longi" : ""), level: lvl};
+    }
+  } catch (err) {
+    res = {label: "Futures", value: "ni podatkov", note: err.message, level: ""};
+  }
+  if (myRun !== runCounter) return;
+  sumFut = res;
+  renderSummary();
 }
 
 /* ---------- seznam ---------- */
