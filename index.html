@@ -292,6 +292,9 @@ var INFO = {
   sec_flow: ["Promet po vrsti trgovcev", "Zadnjih ~300 trgovanj glavnega para (GeckoTerminal), razvrščenih po denarnici, ki je trgovanje sprožila.\nBot: veliko trgovanj, enake velikosti, hiter ritem ali nakup in prodaja v istem bloku. Kit: trgovanje nad večjim od $2K in 1 % likvidnosti (če ni bot). Normalen: ostali.\nTo je ocena po pravilih, ne dokaz. Lovci na Alpha točke so pogosto videti kot boti."],
   sec_holders: ["Top imetniki", "Top 10 imetnikov po GoPlusu, deleži so od skupne ponudbe. Oznaka (npr. borza, bazen) je iz GoPlusa, če obstaja. Povezava odpre transfere denarnice za ta žeton na explorerju.\nStolpec Trgovanja se izpolni samo, če je imetnik sam trgoval prek glavnega bazena v zadnjih ~300 trgovanjih."],
 
+  main_pool: ["Glavni bazen", "DEXScreener včasih ne vidi največjega bazena (npr. Uniswap V4). Aplikacija zato bazene dodatno poišče na GeckoTerminalu. Če drugi viri (GeckoTerminal, Binance Alpha) kažejo več kot dvakrat več likvidnosti, kot jo vidi aplikacija, se pokaže to opozorilo: cena, graf, trgovci in zdrs so lahko z majhnega bazena."],
+  bn_alpha: ["Binance Alpha", "Likvidnost, MCAP, FDV in imetniki iz Binanceovega seznama Alpha. Imena polj nisem preveril, zato vrstica pokaže »brez podatkov«, če jih ne prepozna. Če je DEXScreenerjev MCAP enak FDV, aplikacija uporabi Binanceova."],
+  gp_miss: ["Manjkajoči podatki GoPlusa", "GoPlus za ta žeton ni vrnil vseh polj. Manjkajoče vrstice niso prikazane kot »varno«, ampak so navedene tu. Preveri jih ročno."],
   tot_flow: ["Skupaj nakupi : prodaje", "Seštevek dolarjev vseh nakupov in prodaj v zajetem oknu (zadnjih ~300 trgovanj), ločeno še brez botov in samo boti.\nBoti pogosto kupujejo in prodajajo isti znesek, zato je njihov neto blizu 0 in je pomembnejši neto ostalih trgovcev. Če je neto bota pozitiven, žetone drži in ne prodaja takoj.\nOkno je lahko zelo kratko (pri prometnih žetonih le minuta ali dve), zato je to ocena."],
   set_bp: ["Nakupni pritisk (število)", "Signal »nakupni pritisk«: število nakupnih transakcij proti prodajnim v zadnji uri (DEXScreener, seštevek vseh parov) mora biti vsaj toliko, pri vsaj 100 transakcijah in rasti cene v 1 uri. Število transakcij ni obseg v dolarjih in ga lahko napihnejo boti, zato signal preveri še dolarje."],
   set_usd: ["Nakupni pritisk (USD)", "Drugi korak signala: iz zadnjih ~300 trgovanj glavnega para (GeckoTerminal) se izračuna razmerje nakupov proti prodajam v dolarjih. Mora biti vsaj toliko, neto nakupi ne-botov pa ne smejo biti negativni. Če podatkov o trgovanjih ni, signala ni."],
@@ -371,6 +374,7 @@ var INFO = {
   low1h: ["Najnižja cena zadnje ure", "Najnižja cena v zadnjih 12 petminutnih svečkah (GeckoTerminal). Če je tvoj stop bližje ceni od tega dna, te lahko izbije običajen premik."]
 };
 var INFO_BY_LABEL = {
+  "Glavni bazen": "main_pool", "Dodani bazeni": "main_pool", "Binance Alpha": "bn_alpha", "Manjkajoči podatki GoPlusa": "gp_miss",
   "Skupaj nakupi : prodaje": "tot_flow",
   "Likvidnost proti MCAP": "liq_mcap", "Likvidnost": "liq_mcap", "V obtoku (MCAP / FDV)": "mc_fdv", "MCAP / FDV": "mc_fdv",
   "Promet 24 h proti likvidnosti": "vol_liq", "Nakupi : prodaje (24 h)": "buys_sells", "Starost para": "age", "Sprememba cene": "chg24", "Število parov": "pairs_n", "Razhajanje virov": "src_diff",
@@ -432,6 +436,45 @@ function metric(label, value, note, level){
     (note ? '<div class="mnote">' + esc(note) + '</div>' : '') + '</div>';
 }
 
+/* ---------- dodatni viri: bazeni GeckoTerminal, seznam Binance Alpha ---------- */
+function alphaNums(t){
+  var o = {liq: pf(t.liquidity), mc: pf(t.marketCap), fdv: pf(t.fdv), holders: pf(t.holders)};
+  return (o.liq > 0 || o.mc > 0 || o.fdv > 0 || o.holders > 0) ? o : null;
+}
+async function mergeGtPools(chainKey, addr, list, p){
+  var c = CHAINS[chainKey], none = {added: 0, list: list, note: ""};
+  if (!c) return none;
+  var r = await fetch("https://api.geckoterminal.com/api/v2/networks/" + c.gt + "/tokens/" + encodeURIComponent(addr) + "/pools?page=1&include=dex");
+  if (!r.ok) return none;
+  var j = await r.json(), arr = (j && j.data) || [], dexNames = {};
+  ((j && j.included) || []).forEach(function(x){ if (x.type === "dex" && x.attributes) dexNames[x.id] = x.attributes.name; });
+  var have = {}, al = addr.toLowerCase(), add = [];
+  list.forEach(function(x){ have[String(x.pairAddress).toLowerCase()] = 1; });
+  arr.forEach(function(x){
+    var a = x.attributes || {}, ad = String(a.address || "").toLowerCase(), res = pf(a.reserve_in_usd);
+    if (!ad || have[ad] || !(res >= 1000)) return;
+    var rl = x.relationships || {}, bt = rl.base_token && rl.base_token.data && rl.base_token.data.id;
+    if (bt && String(bt).toLowerCase().slice(-al.length) !== al) return;
+    if (list.some(function(y){ var l = (y.liquidity && y.liquidity.usd) || 0; return l > 0 && Math.abs(l - res) / res < 0.05; })) return;
+    var dx = rl.dex && rl.dex.data && rl.dex.data.id;
+    var qs = (String(a.name || "").split(" / ")[1] || "").replace(/\s+[\d.]+%$/, "").trim();
+    var pc = a.price_change_percentage || {}, tx = a.transactions || {}, vu = a.volume_usd || {};
+    var tt = function(k){ var o = tx[k]; return o ? {buys: num(o.buys) || 0, sells: num(o.sells) || 0} : null; };
+    add.push({chainId: chainKey, dexId: dexNames[dx] || dx || "gecko", pairAddress: a.address,
+      url: "https://www.geckoterminal.com/" + c.gt + "/pools/" + a.address, labels: ["GeckoTerminal"],
+      baseToken: p.baseToken, quoteToken: {symbol: qs || "?"}, priceUsd: a.base_token_price_usd, liquidity: {usd: res},
+      volume: {m5: pf(vu.m5), h1: pf(vu.h1), h6: pf(vu.h6), h24: pf(vu.h24)},
+      priceChange: {m5: pf(pc.m5), h1: pf(pc.h1), h6: pf(pc.h6), h24: pf(pc.h24)},
+      txns: {m5: tt("m5"), h1: tt("h1"), h6: tt("h6"), h24: tt("h24")},
+      fdv: pf(a.fdv_usd), marketCap: pf(a.market_cap_usd), pairCreatedAt: Date.parse(a.pool_created_at) || null});
+  });
+  if (!add.length) return none;
+  var nl = list.concat(add).sort(function(x, y){ return ((y.liquidity && y.liquidity.usd) || 0) - ((x.liquidity && x.liquidity.usd) || 0); });
+  var top = add.slice().sort(function(x, y){ return y.liquidity.usd - x.liquidity.usd; }).slice(0, 2)
+    .map(function(x){ return x.dexId + " " + usd(x.liquidity.usd); }).join(", ");
+  return {added: add.length, list: nl, note: "DEXScreener ni imel vseh bazenov. Iz GeckoTerminala dodano: " + top + (nl[0] === add[0] || add.indexOf(nl[0]) > -1 ? ". Cena, graf in trgovanja so zdaj z največjega bazena." : ".")};
+}
+
 /* ---------- DEXScreener ---------- */
 async function fetchDex(addr){
   var r = await fetch("https://api.dexscreener.com/latest/dex/tokens/" + encodeURIComponent(addr));
@@ -464,7 +507,8 @@ function pickBest(pairs, addr){
   return {best:list[0], list:list};
 }
 
-function marketMetrics(p, list, gt){
+function marketMetrics(p, list, gt, al){
+  var alN = (al && !al.none) ? al : null;
   var rows = [], liq = p.liquidity && num(p.liquidity.usd);
   var mc = num(p.marketCap), fdv = num(p.fdv);
   var vol = list.reduce(function(s2, x){ return s2 + ((x.volume && num(x.volume.h24)) || 0); }, 0);
@@ -476,6 +520,7 @@ function marketMetrics(p, list, gt){
     if (gt.liq > 0 && gt.liq > (liq || 0)) { liq = gt.liq; totalLiq = gt.liq; src = " (vir: GeckoTerminal)"; }
     if (gt.vol > 0 && gt.vol > vol) vol = gt.vol;
   }
+  if (alN && alN.liq > 0 && alN.liq > (liq || 0)) { liq = alN.liq; totalLiq = alN.liq; src = " (vir: Binance Alpha)"; }
   var okMF = function(m, f){ return m > 0 && f > 0 && m <= f * 1.02; };
   var mcBad = false;
   if (!okMF(mc, fdv)) {
@@ -486,12 +531,19 @@ function marketMetrics(p, list, gt){
       if (mc > 0 && fdv > 0 && !okMF(mc, fdv)) mcBad = true;
     }
   }
+  var srcMc = "";
+  if (alN && okMF(alN.mc, alN.fdv)) {
+    var dexRatio = (mc > 0 && fdv > 0) ? mc / fdv : null;
+    if (dexRatio == null || mcBad || (dexRatio > 0.98 && alN.mc / alN.fdv < 0.9)) {
+      mc = alN.mc; fdv = alN.fdv; mcBad = false; srcMc = " (MCAP in FDV: Binance Alpha)";
+    }
+  }
 
   // likvidnost / mcap
   if (liq != null && mc) {
     var r1 = liq / mc * 100;
     rows.push(metric("Likvidnost proti MCAP", pct(r1, 2),
-      "Likvidnost " + usd(liq) + src + ", MCAP " + usd(mc) + (mcBad ? " (neskladen)" : "") + ". Pod 3 % je izstop drag.",
+      "Likvidnost " + usd(liq) + src + ", MCAP " + usd(mc) + (mcBad ? " (neskladen)" : "") + srcMc + ". Pod 3 % je izstop drag.",
       r1 < 3 ? "red" : r1 < 10 ? "amber" : "green"));
   } else {
     rows.push(metric("Likvidnost", usd(liq), "MCAP ni na voljo, razmerja ni mogoče izračunati.", "amber"));
@@ -510,7 +562,7 @@ function marketMetrics(p, list, gt){
   } else if (mc && fdv) {
     var r2 = mc / fdv * 100;
     rows.push(metric("V obtoku (MCAP / FDV)", pct(r2, 0),
-      "Preostali žetoni še pridejo na trg. Preveri urnik odklepanj.",
+      "Preostali žetoni še pridejo na trg. Preveri urnik odklepanj." + srcMc,
       r2 < 30 ? "red" : r2 < 70 ? "amber" : "green"));
   } else {
     rows.push(metric("MCAP / FDV", mc ? usd(mc) + " / " + usd(fdv) : "ni podatka", "FDV ali MCAP manjka.", "amber"));
@@ -548,6 +600,12 @@ function marketMetrics(p, list, gt){
   if (list.length > 1) {
     rows.push(metric("Število parov", String(list.length), "Skupna likvidnost čez vse pare: " + usd(totalLiq) + ".", ""));
   }
+  var otherLiq = Math.max((gt && gt.liq) || 0, (alN && alN.liq) || 0);
+  if (otherLiq > 2 * dexLiq) rows.push(metric("Glavni bazen", "verjetno ni viden",
+    "DEXScreener (z dodanimi bazeni) vidi " + usd(dexLiq) + " likvidnosti, drugi viri do " + usd(otherLiq) + ". Cena, graf, trgovci in zdrs so lahko z majhnega bazena, zato niso zanesljivi.", "amber"));
+  if (al && alN) rows.push(metric("Binance Alpha", "likv. " + usd(alN.liq) + " · MCAP " + usd(alN.mc) + " · FDV " + usd(alN.fdv),
+    "Imetniki: " + (alN.holders > 0 ? Number(alN.holders).toLocaleString("sl-SI") : "ni podatka") + ". Podatki iz seznama Alpha (Binance).", ""));
+  else if (al) rows.push(metric("Binance Alpha", "brez podatkov", "Žeton je v seznamu Alpha, a polj likvidnost, MCAP in FDV nisem prepoznal.", ""));
   return rows;
 }
 
@@ -614,6 +672,14 @@ function securityMetrics(s){
     var cp = num(s.creator_percent) * 100;
     rows.push(metric("Delež ustvarjalca", pct(cp, 1), "", cp > 10 ? "red" : cp > 3 ? "amber" : "green"));
   }
+  var miss = [];
+  if (!has(s.is_honeypot)) miss.push("honeypot");
+  if (!has(s.is_mintable)) miss.push("izdajanje žetonov");
+  if (!has(s.hidden_owner)) miss.push("skriti lastnik");
+  if (!has(s.can_take_back_ownership)) miss.push("prevzem lastništva");
+  if (!has(s.owner_address)) miss.push("lastnik");
+  if (miss.length) rows.push(metric("Manjkajoči podatki GoPlusa", miss.join(", "),
+    "GoPlus teh polj ni vrnil. To ni isto kot »varno«: preveri ročno prek povezave GoPlus poročilo.", "amber"));
   return rows;
 }
 
@@ -998,11 +1064,22 @@ async function run(){
   var pick = pickBest(pairs, addr), p = pick.best, list = pick.list;
   var chainKey = p.chainId;
   var chain = CHAINS[chainKey];
+  var poolNote = "", alp = null;
+  try {
+    var mg = await mergeGtPools(chainKey, addr, list, p);
+    if (mg.added) { list = mg.list; p = list[0]; poolNote = mg.note; }
+  } catch (eg2) {}
+  try {
+    var atk = await getAlphaTokens();
+    var ae = atk.filter(function(t){ return String(t.contractAddress).toLowerCase() === addr.toLowerCase(); })[0];
+    if (ae) alp = alphaNums(ae) || {none: true};
+  } catch (ea) {}
 
   var gtd = null;
   try { gtd = await fetchGT(chainKey, addr); } catch (eg) {}
   sumCol = []; sumFut = null; sumCat = "m";
-  var rows = marketMetrics(p, list, gtd);
+  var rows = marketMetrics(p, list, gtd, alp);
+  if (poolNote) rows.unshift(metric("Dodani bazeni", "iz GeckoTerminala", poolNote, "amber"));
   sumCat = "";
   var secRows = [], secNote = "", gp = null;
   if (chain && chain.id) {
