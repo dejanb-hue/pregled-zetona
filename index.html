@@ -165,6 +165,8 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
     <label><span>Opozori, ko cena v 5 min zraste nad<span class="info" role="button" tabindex="0" data-info="set_thr" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="thr" min="1" step="1" inputmode="decimal"> %</span></label>
     <label><span>Opozori ob skoku open interesta v 5 min nad<span class="info" role="button" tabindex="0" data-info="set_oi" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="oithr" min="0.5" step="0.5" inputmode="decimal"> %</span></label>
     <label><span>Opozori, ko taker promet (5 min) preseže povprečje za<span class="info" role="button" tabindex="0" data-info="set_tk" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="tkthr" min="1.5" step="0.5" inputmode="decimal"> x</span></label>
+    <label><span>Nakupni pritisk: nakupi proti prodajam (število, 1 h) vsaj<span class="info" role="button" tabindex="0" data-info="set_bp" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="bpthr" min="1.1" step="0.1" inputmode="decimal"> x</span></label>
+    <label><span>Nakupni pritisk: nakupi proti prodajam (USD) vsaj<span class="info" role="button" tabindex="0" data-info="set_usd" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="usdthr" min="1" step="0.1" inputmode="decimal"> x</span></label>
     <label><span>Futures: pogoji za prikaz<span class="info" role="button" tabindex="0" data-info="set_cond" aria-label="Razlaga">ⓘ</span></span><select id="fcond"><option value="both">oba pogoja</option><option value="any">vsaj eden</option><option value="none">brez filtra</option></select></label>
     <label><span>Rast volumna (proti prejšnjemu obdobju) vsaj<span class="info" role="button" tabindex="0" data-info="set_volx" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="volx" min="1" step="0.5" inputmode="decimal"> x</span></label>
     <label><span>Sprememba OI (v količini) vsaj<span class="info" role="button" tabindex="0" data-info="set_oimin" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="oimin" min="0.5" step="0.5" inputmode="decimal"> %</span></label>
@@ -281,7 +283,7 @@ var INFO = {
   sec_gainers: ["Največji rastoči · Binance Alpha", "Seznam Alpha žetonov z Binance, cene in spremembe z DEXScreenerja. Razvrščeno po spremembi cene v izbranem obdobju.\nSprememba cene je z glavnega para (največ likvidnosti), likvidnost in promet 24 h sta seštevek vseh parov žetona.\n15 min Binance ne ponuja, zato ga izračunam iz minutnih svečk Binance Alpha, in to samo za do 24 kandidatov z najvišjo rastjo v 5 min in 1 uri. Žeton izven teh kandidatov se v 15-min seznamu ne more pojaviti.\nOranžna likvidnost = pod $50K, izstop je težak. Vrstica »Futures« pod žetonom pokaže, ali ima kovanec futures par in kaj se tam dogaja."],
   sec_settings: ["Nastavitve in opozorila", "Nastavitve se shranijo v brskalnik te naprave. Opozorila (rast cene, skok OI, taker promet, novi signali) delujejo samo ob vklopljenem samodejnem osveževanju in odprti strani. Zvok in vibracija se sprožita ob vsakem opozorilu, isti kovanec se ne javi znova 15 minut."],
   sec_futures: ["Futures · Binance", "Javni podatki Binance Futures. Pregleda do 40 kovancev: pri »Alpha z futures« tiste Alpha žetone, ki imajo futures par (povezava po simbolu in ceni, 1000PEPE velja za PEPE), pri »Vsi futures« 30 največjih po prometu in 15 največjih gibalcev.\nZa izbrano obdobje (15 min, 1 ura, 3 ure) izračuna rast futures prometa, spremembo OI v količini in spremembo cene iz svečk.\nPrikaže do 10 kovancev, ki izpolnjujejo pogoje iz nastavitev, razvrščenih po rasti volumna. Ni napoved cene."],
-  sec_signals: ["Beleženje signalov", "Signal = kovanec je v 15-min ali 1-urnem oknu hkrati presegel prag rasti volumna in spremembe OI (nastavitve) in ima jasno stanje (ne »brez signala«). Največ en signal na kovanec in okno na uro.\nIzid = sprememba futures cene od trenutka signala po 15 min, 1 h in 3 h, brez provizij in zdrsa. Izidi se dopolnijo tudi, ko je bila stran zaprta.\nTapni skupino ali signal za podrobnosti (kovanec, cena, OI, volumen, funding). Shranjeno v brskalniku te naprave. Majhen vzorec ni dokaz."],
+  sec_signals: ["Beleženje signalov", "Signal = kovanec je v 15-min ali 1-urnem oknu hkrati presegel prag rasti volumna in spremembe OI (nastavitve) in ima jasno stanje (ne »brez signala«). Največ en signal na kovanec in okno na uro.\nIzid = sprememba futures cene od trenutka signala po 15 min, 1 h in 3 h, brez provizij in zdrsa. Izidi se dopolnijo tudi, ko je bila stran zaprta.\nTapni skupino ali signal za podrobnosti (kovanec, cena, OI, volumen, funding). Shranjeno v brskalniku te naprave. Majhen vzorec ni dokaz.\nSignal »nakupni pritisk« velja za Alpha žetone (tudi brez futures): število nakupov proti prodajam v 1 uri in dolarji iz zadnjih trgovanj (nastavitve). Izid je sprememba cene z DEXScreenerja po 15 min, 1 h in 3 h (iz svečk GeckoTerminal)."],
   sec_trend: ["Trend zadnja ura", "Posnetki futures podatkov (cena, OI v količini, promet, taker, L/S, funding) se shranijo ob osveževanju futures panela, največ enkrat na 5 min na kovanec, in se hranijo 24 h v tej napravi. Vsak stolpec kaže 15-min obdobje do navedene ure. Taker in L/S sta samo za kovance, ki so bili v top 10 panela. Posnetki se zapisujejo samo, ko je stran odprta."],
   sec_check: ["Preveri žeton", "Prilepi naslov pogodbe. DEXScreener najde pare in izbere tistega z največ likvidnosti, veriga se zazna sama. Viri: DEXScreener (cene, likvidnost, promet), GoPlus (varnost pogodbe, EVM), GeckoTerminal (svečke in zadnja trgovanja). Pregled ni napoved cene."],
   sec_gibanje: ["Gibanje", "Sprememba cene je z glavnega para (DEXScreener). Promet in število nakupov/prodaj sta seštevek vseh parov žetona. Vrstica 15 min je izračunana iz svečk GeckoTerminal glavnega para, zato je približna.\nGraf kaže zadnjih 60 svečk po 5 min, 15 min ali 1 uro, pod njimi je promet."],
@@ -290,6 +292,9 @@ var INFO = {
   sec_flow: ["Promet po vrsti trgovcev", "Zadnjih ~300 trgovanj glavnega para (GeckoTerminal), razvrščenih po denarnici, ki je trgovanje sprožila.\nBot: veliko trgovanj, enake velikosti, hiter ritem ali nakup in prodaja v istem bloku. Kit: trgovanje nad večjim od $2K in 1 % likvidnosti (če ni bot). Normalen: ostali.\nTo je ocena po pravilih, ne dokaz. Lovci na Alpha točke so pogosto videti kot boti."],
   sec_holders: ["Top imetniki", "Top 10 imetnikov po GoPlusu, deleži so od skupne ponudbe. Oznaka (npr. borza, bazen) je iz GoPlusa, če obstaja. Povezava odpre transfere denarnice za ta žeton na explorerju.\nStolpec Trgovanja se izpolni samo, če je imetnik sam trgoval prek glavnega bazena v zadnjih ~300 trgovanjih."],
 
+  tot_flow: ["Skupaj nakupi : prodaje", "Seštevek dolarjev vseh nakupov in prodaj v zajetem oknu (zadnjih ~300 trgovanj), ločeno še brez botov in samo boti.\nBoti pogosto kupujejo in prodajajo isti znesek, zato je njihov neto blizu 0 in je pomembnejši neto ostalih trgovcev. Če je neto bota pozitiven, žetone drži in ne prodaja takoj.\nOkno je lahko zelo kratko (pri prometnih žetonih le minuta ali dve), zato je to ocena."],
+  set_bp: ["Nakupni pritisk (število)", "Signal »nakupni pritisk«: število nakupnih transakcij proti prodajnim v zadnji uri (DEXScreener, seštevek vseh parov) mora biti vsaj toliko, pri vsaj 100 transakcijah in rasti cene v 1 uri. Število transakcij ni obseg v dolarjih in ga lahko napihnejo boti, zato signal preveri še dolarje."],
+  set_usd: ["Nakupni pritisk (USD)", "Drugi korak signala: iz zadnjih ~300 trgovanj glavnega para (GeckoTerminal) se izračuna razmerje nakupov proti prodajam v dolarjih. Mora biti vsaj toliko, neto nakupi ne-botov pa ne smejo biti negativni. Če podatkov o trgovanjih ni, signala ni."],
   sec_b15: ["Zadnjih 15 min po 5 min", "Zadnjih 15 minutnih svečk glavnega para (GeckoTerminal), razdeljenih na tri 5-minutna obdobja. Za vsako: sprememba cene od odprtja do zaprtja, promet v USD, delež prometa v teh 15 min in razpon (najvišja proti najnižji ceni).\nPromet je samo glavni par. Nakupov in prodaj v dolarjih ta vir ne daje, kdo je trgoval (kiti, boti) pa tudi ne: to je v razdelku Promet po vrsti trgovcev, ki zajame samo zadnjih ~300 trgovanj.\nZadnja minuta je lahko še tekoča, zato je zadnje obdobje rahlo podcenjeno."],
   set_thr: ["Opozorilo ob rasti cene", "Ko cena Alpha žetona (DEXScreener, glavni par) v 5 min zraste nad ta prag in ima žeton vsaj izbrano likvidnost, se sproži opozorilo (zvok, vibracija, oznaka na vrhu). Isti žeton se ne javi znova 15 min."],
   set_oi: ["Opozorilo ob skoku OI", "Open interest je število odprtih futures pogodb. Če se v 5 min spremeni (v količini, ne v dolarjih) za več kot ta prag, se sproži opozorilo. Preverja do 40 pregledanih futures kovancev."],
@@ -366,6 +371,7 @@ var INFO = {
   low1h: ["Najnižja cena zadnje ure", "Najnižja cena v zadnjih 12 petminutnih svečkah (GeckoTerminal). Če je tvoj stop bližje ceni od tega dna, te lahko izbije običajen premik."]
 };
 var INFO_BY_LABEL = {
+  "Skupaj nakupi : prodaje": "tot_flow",
   "Likvidnost proti MCAP": "liq_mcap", "Likvidnost": "liq_mcap", "V obtoku (MCAP / FDV)": "mc_fdv", "MCAP / FDV": "mc_fdv",
   "Promet 24 h proti likvidnosti": "vol_liq", "Nakupi : prodaje (24 h)": "buys_sells", "Starost para": "age", "Sprememba cene": "chg24", "Število parov": "pairs_n", "Razhajanje virov": "src_diff",
   "Honeypot": "honeypot", "Davek nakup / prodaja": "tax", "Koda pogodbe objavljena": "opensrc", "Lastnik lahko izdaja nove žetone": "mint",
@@ -597,7 +603,10 @@ function securityMetrics(s){
   if (Array.isArray(s.holders) && s.holders.length) {
     var top10 = s.holders.slice(0, 10).reduce(function(a, h){return a + (num(h.percent) || 0);}, 0) * 100;
     var top1 = (num(s.holders[0].percent) || 0) * 100;
-    rows.push(metric("Top 10 denarnic", pct(top10, 1),
+    if (top10 > 100.5) {
+      rows.push(metric("Top 10 denarnic", pct(top10, 1) + " (neskladno)",
+        "Seštevek nad 100 %: podatki GoPlusa so neskladni (verjetno napačna ponudba), zato ocena ni zanesljiva. Preveri imetnike na explorerju.", "amber"));
+    } else rows.push(metric("Top 10 denarnic", pct(top10, 1),
       "Vključuje tudi likvidnostne bazene in pogodbe. Največja: " + pct(top1, 1) + ".",
       top10 > 60 ? "red" : top10 > 35 ? "amber" : "green"));
   }
@@ -864,6 +873,11 @@ function flowHtml(an, chainKey, addr){
     if (k === "whale" && pc > 15) level = c.sell > c.buy * 1.5 ? "red" : (c.buy > c.sell * 1.5 ? "green" : "amber");
     return metric(names[k], pct(pc, 0) + " prometa", c.w + " denarnic · nakupi " + usd(c.buy) + " · prodaje " + usd(c.sell), level);
   }).join("");
+  var nB = an.cls.normal.buy + an.cls.whale.buy, nS = an.cls.normal.sell + an.cls.whale.sell, bB = an.cls.bot.buy, bS = an.cls.bot.sell;
+  var tB = nB + bB, tS = nS + bS, tR = tS > 0 ? tB / tS : null;
+  var tot = metric("Skupaj nakupi : prodaje", usd(tB) + " : " + usd(tS),
+    "Razmerje " + fr(tR) + "x · neto " + usdS(tB - tS) + ". Brez botov: nakupi " + usd(nB) + ", prodaje " + usd(nS) + " (neto " + usdS(nB - nS) + "). Boti neto " + usdS(bB - bS) + ".",
+    tR == null ? "" : tR >= settings.usdThr ? "green" : tR <= 1 / settings.usdThr ? "red" : "");
   var extra = "";
   if (an.jumps.length) {
     var j = an.jumps[0], ad = Math.abs(j.d);
@@ -887,7 +901,7 @@ function flowHtml(an, chainKey, addr){
       '<td>' + esc(cn[w.cls] + (w.reasons[0] ? " · " + w.reasons[0] : "")) + '</td><td>' + w.n + '</td><td>' + esc(usd(w.buy) + " / " + usd(w.sell)) + '</td></tr>';
   }).join("");
   var legend = '<span style="color:var(--accent)">■</span> normalni · <span style="color:var(--amber)">■</span> kiti · <span style="color:var(--muted)">■</span> boti';
-  return '<h2>Promet po vrsti trgovcev' + infoBtn('sec_flow') + '</h2>' + note('Kdo ustvarja promet. Vir: zadnja trgovanja do 3 največjih bazenov (GeckoTerminal), zajeto okno je prikazano spodaj. Razvrstitev je ocena po pravilih.') + covHtml() + '<div class="card"><div class="stack">' + seg + '</div><div class="cap">' + legend + '</div>' + rows + extra + '</div>' +
+  return '<h2>Promet po vrsti trgovcev' + infoBtn('sec_flow') + '</h2>' + note('Kdo ustvarja promet. Vir: zadnja trgovanja do 3 največjih bazenov (GeckoTerminal), zajeto okno je prikazano spodaj. Razvrstitev je ocena po pravilih.') + covHtml() + '<div class="card"><div class="stack">' + seg + '</div><div class="cap">' + legend + '</div>' + tot + rows + extra + '</div>' +
     '<h2 style="font-size:14px;color:var(--muted)">Največji trgovci po prometu</h2>' +
     '<div class="card" style="overflow-x:auto"><table class="pairs"><thead><tr><th>Naslov</th><th>Razred' + infoBtn('w_class') + '</th><th>Tr.' + infoBtn('w_n') + '</th><th>Nak. / prod.' + infoBtn('w_nb') + '</th></tr></thead><tbody>' + trs + '</tbody></table></div>' +
     '<div class="cap">Zadnjih ' + an.n + ' trgovanj glavnega para (' + esc(spanTxt) + '), skupaj ' + esc(usd(an.total)) + '. Kit = trgovanje nad ' + esc(usd(an.thr)) +
@@ -902,9 +916,16 @@ function holdersHtml(gp, an, chainKey, addr){
   var sum = function(arr){ return arr.reduce(function(a, x){ return a + pc(x); }, 0); };
   var free = h.filter(function(x){ return String(x.is_contract) !== "1" && String(x.is_locked) !== "1"; });
   var top1 = pc(h[0]), top5 = sum(h.slice(0, 5)), top10 = sum(h), free5 = sum(free.slice(0, 5));
+  var badH = top10 > 100.5, scH = sumCat;
+  if (badH) sumCat = "";
   var summary =
     metric("Top 5 imetnikov", pct(top5, 1), "Top 1: " + pct(top1, 1) + " · Top 10: " + pct(top10, 1), top5 > 60 ? "red" : top5 > 35 ? "amber" : "green") +
     metric("Top 5 brez pogodb in zaklenjenih", pct(free5, 1), "Delež, ki ga lastniki lahko takoj prodajo.", free5 > 40 ? "red" : free5 > 20 ? "amber" : "green");
+  if (badH) {
+    sumCat = scH;
+    summary = metric("Imetniki: podatki neskladni", pct(top10, 1) + " (top 10)",
+      "Seštevek deležev je nad 100 %, GoPlus ima verjetno napačno ponudbo. Deleži in ocena koncentracije niso zanesljivi. Preveri imetnike na explorerju.", "amber");
+  }
   var rows = h.map(function(x){
     var a = String(x.address || "");
     var tag = x.tag ? String(x.tag) : (String(x.is_contract) === "1" ? "pogodba" : "denarnica");
@@ -1175,7 +1196,7 @@ var DX_CHAIN = {"56":"bsc","1":"ethereum","8453":"base","42161":"arbitrum","137"
 var gBusyAt = 0, fBusyAt = 0, lastAlphaAt = 0, lastFutAt = 0, wd = null;
 var alphaTokens = null, alphaAt = 0, gRows = [], gTab = "15m", gBusy = false, k15Busy = false, gTimer = null;
 var alerted = {}, alertLog = [], audioCtx = null, wakeLock = null, k15Fail = false;
-var settings = {auto: false, thr: 10, minLiq: 10000, oiThr: 3, tkThr: 3, volX: 2, oiMin: 2, cond: "both", tf: {amt: 100, stop: 5, tgt: 10, fee: 0.25}};
+var settings = {auto: false, thr: 10, minLiq: 10000, oiThr: 3, tkThr: 3, volX: 2, oiMin: 2, bpThr: 1.8, usdThr: 1.3, minTx: 100, cond: "both", tf: {amt: 100, stop: 5, tgt: 10, fee: 0.25}};
 
 function loadSettings(){
   try {
@@ -1184,6 +1205,8 @@ function loadSettings(){
     if (num(o.minLiq) != null) settings.minLiq = num(o.minLiq);
     if (num(o.oiThr) != null && o.oiThr > 0) settings.oiThr = num(o.oiThr);
     if (num(o.tkThr) != null && o.tkThr > 0) settings.tkThr = num(o.tkThr);
+    if (num(o.bpThr) != null && o.bpThr > 1) settings.bpThr = num(o.bpThr);
+    if (num(o.usdThr) != null && o.usdThr >= 1) settings.usdThr = num(o.usdThr);
     if (num(o.volX) != null && o.volX > 0) settings.volX = num(o.volX);
     if (num(o.oiMin) != null && o.oiMin > 0) settings.oiMin = num(o.oiMin);
     if (o.cond === "both" || o.cond === "any" || o.cond === "none") settings.cond = o.cond;
@@ -1247,9 +1270,12 @@ async function scanAlpha(){
       arr.forEach(function(p){
         var a = String(p.baseToken && p.baseToken.address).toLowerCase();
         var l = (p.liquidity && p.liquidity.usd) || 0;
-        var b0 = best[a] || (best[a] = {l: 0, vol: 0, pl: -1, p: null});
+        var b0 = best[a] || (best[a] = {l: 0, vol: 0, pl: -1, p: null, b1: 0, s1: 0, b5: 0, s5: 0});
         b0.l += l;
         b0.vol += (p.volume && p.volume.h24) || 0;
+        var t1 = p.txns && p.txns.h1, t5 = p.txns && p.txns.m5;
+        if (t1) { b0.b1 += t1.buys || 0; b0.s1 += t1.sells || 0; }
+        if (t5) { b0.b5 += t5.buys || 0; b0.s5 += t5.sells || 0; }
         if (l > b0.pl) { b0.pl = l; b0.p = p; }
       });
     });
@@ -1265,7 +1291,7 @@ async function scanAlpha(){
       rows.push({
         sym: t.symbol, addr: t.contractAddress, chain: p.chainId, alphaId: t.alphaId,
         m5: num(pc.m5), h1: num(pc.h1), h6: num(pc.h6), h24: num(pc.h24),
-        liq: b.l, vol: b.vol, price: num(p.priceUsd),
+        liq: b.l, vol: b.vol, price: num(p.priceUsd), b1: b.b1, s1: b.s1, b5: b.b5, s5: b.s5, pool: p.pairAddress,
         c15: o ? o.c15 : null, c15At: o ? o.c15At : 0
       });
     });
@@ -1273,6 +1299,7 @@ async function scanAlpha(){
     gRows = rows;
     checkAlerts();
     renderGainers();
+    buySignals();
     setStatus(rows.length + " žetonov · " + new Date().toLocaleTimeString("sl-SI"));
     if (gTab === "15m") compute15();
   } catch (e) {
@@ -1342,7 +1369,7 @@ function renderGainers(){
       '<span class="gr">' + (i + 1) + '</span>' +
       '<span class="gs"><b>' + esc(r.sym) + '</b><i>' + esc(r.chain) + '</i>' +
       '<small>likv. <span class="' + (thin ? "thin" : "") + '">' + esc(usd(r.liq)) + '</span> · promet 24 h ' + esc(usd(r.vol)) +
-      ' · 5 min ' + esc(sgn(r.m5)) + ' · 1 h ' + esc(sgn(r.h1)) + '</small><small class="gfut" id="gf' + i + '">Futures: …</small></span>' +
+      ' · 5 min ' + esc(sgn(r.m5)) + ' · 1 h ' + esc(sgn(r.h1)) + (bsr(r) != null ? ' · nak/prod 1 h <span class="' + (bsr(r) >= settings.bpThr ? 'up' : '') + '">' + esc(fr(bsr(r))) + 'x</span>' : '') + '</small><small class="gfut" id="gf' + i + '">Futures: …</small></span>' +
       '<span class="gv ' + (v < 0 ? "down" : "up") + '">' + esc(sgn(v)) + '</span></button>';
   }).join("");
   augmentGainers(list);
@@ -1351,7 +1378,7 @@ function renderGainers(){
 /* ---------- Binance Futures ---------- */
 var FAPI = "https://fapi.binance.com";
 var TFL = {"5m": "5 min", "15m": "15 min", "1h": "1 ura", "3h": "3 ure", "6h": "6 ur"};
-var STATE_NAMES = {squeeze: "squeeze", newlong: "nove pozicije ↑", newshort: "novi shorti", liq: "likvidacije", flat: "brez signala"};
+var STATE_NAMES = {squeeze: "squeeze", newlong: "nove pozicije ↑", newshort: "novi shorti", liq: "likvidacije", flat: "brez signala", buyp: "nakupni pritisk"};
 var HORIZ = [{k: "15m", m: 15}, {k: "1h", m: 60}, {k: "3h", m: 180}];
 var fTimer = null, futScope = "alpha", futPer = "15m", futBusy = false, futPending = false;
 var futInfo = null, futInfoAt = 0, tickCache = null, tickAt = 0, premCache = null, premAt = 0;
@@ -1585,6 +1612,59 @@ async function augmentGainers(list){
   });
 }
 
+/* ---------- signal: nakupni pritisk (spot, Alpha) ---------- */
+function bsr(r){ return (r.s1 > 0 && r.b1 + r.s1 > 0) ? r.b1 / r.s1 : null; }
+function usdS(n){ return (n < 0 ? "−" : "+") + usd(Math.abs(n)); }
+var bsBusy = false, tradeCache = {};
+async function gtPriceAt(s, at){
+  var c = CHAINS[s.chain];
+  if (!c || !s.pool) return null;
+  var sec = Math.floor(at / 1000);
+  var r = await fetch("https://api.geckoterminal.com/api/v2/networks/" + c.gt + "/pools/" + encodeURIComponent(s.pool) +
+    "/ohlcv/minute?aggregate=1&limit=3&include_empty_intervals=true&before_timestamp=" + (sec + 60));
+  if (!r.ok) throw new Error("GT " + r.status);
+  var j = await r.json();
+  var l = j && j.data && j.data.attributes && j.data.attributes.ohlcv_list;
+  if (!l || !l.length) return null;
+  var best = null, bd = 1e12;
+  l.forEach(function(k){ var d = Math.abs(k[0] - sec); if (d < bd) { bd = d; best = k; } });
+  return (best && bd <= 120) ? best[1] : null;
+}
+async function buySignals(){
+  if (bsBusy || !gRows.length) return;
+  bsBusy = true;
+  try {
+    var sigs = loadSigs(), now = Date.now(), added = [];
+    var cand = visibleRows().filter(function(r){
+      var q = bsr(r);
+      if (q == null || q < settings.bpThr || r.b1 + r.s1 < settings.minTx) return false;
+      if (!(r.h1 > 0) || !(r.price > 0) || !r.pool || !CHAINS[r.chain]) return false;
+      var a = r.addr.toLowerCase();
+      return !sigs.some(function(s){ return s.st === "buyp" && s.addr && s.addr.toLowerCase() === a && now - s.t < 3600000; });
+    }).sort(function(a, b){ return bsr(b) - bsr(a); }).slice(0, 3);
+    for (var i = 0; i < cand.length; i++) {
+      var r = cand[i], key = r.addr.toLowerCase(), tc = tradeCache[key];
+      if (!tc || now - tc.t > 180000) {
+        try {
+          var tr = await fetchTrades(r.chain, r.pool, r.addr);
+          tc = tradeCache[key] = {t: Date.now(), an: tr.length >= 5 ? analyzeTrades(tr, r.liq) : null};
+        } catch (e) { continue; }
+      }
+      var an = tc.an;
+      if (!an) continue;
+      var nb = an.cls.normal.buy + an.cls.whale.buy, ns = an.cls.normal.sell + an.cls.whale.sell;
+      var bb = an.cls.bot.buy, bs = an.cls.bot.sell, tb = nb + bb, ts = ns + bs;
+      var dr = ts > 0 ? tb / ts : (tb > 0 ? 99 : null);
+      if (dr == null || dr < settings.usdThr || nb < ns) continue;
+      var sg = {id: r.sym + "_buyp_" + now, sym: r.sym, label: r.sym, addr: r.addr, chain: r.chain, pool: r.pool, src: "gt", t: now, per: "1h",
+        p0: r.price, st: "buyp", oc: null, pc: r.h1, vx: null, fund: null, br: bsr(r), dr: dr, nb: nb - ns, bn: bb - bs, o: {"15m": null, "1h": null, "3h": null}};
+      sigs.push(sg); added.push(sg);
+    }
+    if (added.length) { saveSigs(sigs); renderSigs(); announceSignals(added); }
+  } catch (e0) {}
+  bsBusy = false;
+}
+
 /* ---------- beleženje signalov ---------- */
 var SIG_KEY = "ct_sig";
 var OI_MAX = 50;
@@ -1622,6 +1702,11 @@ async function resolveSigs(){
   if (!jobs.length) return;
   await pool(jobs, 4, async function(job){
     var at = job.s.t + job.h.m * 60000;
+    if (job.s.src === "gt") {
+      var o2 = await gtPriceAt(job.s, at);
+      job.s.o[job.h.k] = o2 ? pchg(o2, job.s.p0) : "x";
+      return;
+    }
     var k = await fj("/fapi/v1/klines?symbol=" + job.s.sym + "&interval=1m&startTime=" + at + "&limit=1");
     if (Array.isArray(k) && k.length) {
       var o = pf(k[0][1]);
@@ -1634,7 +1719,7 @@ function announceSignals(list){
   if (!list.length || !$("auto").checked) return;
   list.slice(0, 5).forEach(function(s){
     alertLog.unshift({sym: s.label, addr: s.addr,
-      rest: "signal " + TFL[s.per] + ": " + STATE_NAMES[s.st] + ", volumen " + fr(s.vx) + "x, OI " + sgn(s.oc),
+      rest: s.st === "buyp" ? "nakupni pritisk 1 h: nak/prod " + fr(s.br) + "x (število), " + fr(s.dr) + "x (USD)" : "signal " + TFL[s.per] + ": " + STATE_NAMES[s.st] + ", volumen " + fr(s.vx) + "x, OI " + sgn(s.oc),
       time: new Date().toLocaleTimeString("sl-SI")});
   });
   alertLog = alertLog.slice(0, 10);
@@ -1654,8 +1739,10 @@ function sigDetail(s, brief){
     (brief ? '' : '<div class="top"><span><b>' + esc(s.label) + '</b> <span class="stat">' + esc(s.sym) + '</span></span><span class="stat">' + esc(when) + '</span></div>' +
       '<small>' + esc(TFL[s.per]) + ' · ' + esc(STATE_NAMES[s.st] || s.st) + '</small>') +
     '<small>Izid: ' + outTxt + '</small>' +
-    '<small>Ob signalu (' + esc(when) + '): futures cena ' + esc(price(s.p0)) + ' · volumen ' + esc(fr(s.vx)) + 'x · OI ' + esc(sgn(s.oc)) +
-    ' · cena ' + esc(sgn(s.pc)) + ' · funding ' + esc(fr3(fund)) + ' %</small>' +
+    (s.st === "buyp"
+      ? '<small>Ob signalu (' + esc(when) + '): cena ' + esc(price(s.p0)) + ' · nakupi/prodaje (število, 1 h) ' + esc(fr(s.br)) + 'x · v USD ' + esc(fr(s.dr)) + 'x · neto brez botov ' + esc(usdS(s.nb)) + ' · neto boti ' + esc(usdS(s.bn)) + ' · cena 1 h ' + esc(sgn(s.pc)) + '</small>'
+      : '<small>Ob signalu (' + esc(when) + '): futures cena ' + esc(price(s.p0)) + ' · volumen ' + esc(fr(s.vx)) + 'x · OI ' + esc(sgn(s.oc)) +
+        ' · cena ' + esc(sgn(s.pc)) + ' · funding ' + esc(fr3(fund)) + ' %</small>') +
     (s.addr ? '<div style="padding:6px 0 2px"><button class="ghost small fopen" data-addr="' + esc(s.addr) + '">Odpri v pregledu</button></div>' : '') +
     '</div>';
 }
@@ -2160,6 +2247,14 @@ $("tkthr").addEventListener("change", function(){
   this.value = settings.tkThr;
   saveSettings();
 });
+$("bpthr").addEventListener("change", function(){
+  var v = num(this.value.replace(",", "."));
+  settings.bpThr = (v && v > 1) ? v : 1.8; this.value = settings.bpThr; saveSettings();
+});
+$("usdthr").addEventListener("change", function(){
+  var v = num(this.value.replace(",", "."));
+  settings.usdThr = (v && v >= 1) ? v : 1.3; this.value = settings.usdThr; saveSettings();
+});
 $("oithr").addEventListener("change", function(){
   var v = num(this.value.replace(",", "."));
   settings.oiThr = (v && v > 0) ? v : 3;
@@ -2352,6 +2447,8 @@ $("thr").value = settings.thr;
 $("minliq").value = String(settings.minLiq);
 $("oithr").value = settings.oiThr;
 $("tkthr").value = settings.tkThr;
+$("bpthr").value = settings.bpThr;
+$("usdthr").value = settings.usdThr;
 $("fcond").value = settings.cond;
 $("volx").value = settings.volX;
 $("oimin").value = settings.oiMin;
