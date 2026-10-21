@@ -1432,10 +1432,13 @@ async function scanAlpha(){
       if (!b) return;
       var p = b.p, pc = p.priceChange || {};
       var o = old[key];
+      var bl = pf(t.liquidity), bv = pf(t.volume24h), b24 = pf(t.percentChange24h);
+      var miss = bl > 2 * b.l;
       rows.push({
         sym: t.symbol, addr: t.contractAddress, chain: p.chainId, alphaId: t.alphaId,
-        m5: num(pc.m5), h1: num(pc.h1), h6: num(pc.h6), h24: num(pc.h24),
-        liq: b.l, vol: b.vol, price: num(p.priceUsd), b1: b.b1, s1: b.s1, b5: b.b5, s5: b.s5, pool: p.pairAddress,
+        m5: num(pc.m5), h1: num(pc.h1), h6: num(pc.h6), h24: b24 != null ? b24 : num(pc.h24),
+        dexLiq: b.l, miss: miss,
+        liq: Math.max(b.l, bl || 0), vol: Math.max(b.vol, bv || 0), price: num(p.priceUsd), b1: b.b1, s1: b.s1, b5: b.b5, s5: b.s5, pool: p.pairAddress,
         c15: o ? o.c15 : null, c15At: o ? o.c15At : 0
       });
     });
@@ -1512,7 +1515,7 @@ function renderGainers(){
     return '<button class="grow" data-addr="' + esc(r.addr) + '">' +
       '<span class="gr">' + (i + 1) + '</span>' +
       '<span class="gs"><b>' + esc(r.sym) + '</b><i>' + esc(r.chain) + '</i>' +
-      '<small>likv. <span class="' + (thin ? "thin" : "") + '">' + esc(usd(r.liq)) + '</span> · promet 24 h ' + esc(usd(r.vol)) +
+      '<small>likv. <span class="' + (thin ? "thin" : "") + '">' + esc(usd(r.liq)) + '</span>' + (r.miss ? ' <span class="thin">(DEX vidi ' + esc(usd(r.dexLiq)) + ')</span>' : '') + ' · promet 24 h ' + esc(usd(r.vol)) +
       ' · 5 min ' + esc(sgn(r.m5)) + ' · 1 h ' + esc(sgn(r.h1)) + (bsr(r) != null ? ' · nak/prod 1 h <span class="' + (bsr(r) >= settings.bpThr ? 'up' : '') + '">' + esc(fr(bsr(r))) + 'x</span>' : '') + '</small><small class="gfut" id="gf' + i + '">Futures: …</small></span>' +
       '<span class="gv ' + (v < 0 ? "down" : "up") + '">' + esc(sgn(v)) + '</span></button>';
   }).join("");
@@ -1524,7 +1527,7 @@ var FAPI = "https://fapi.binance.com";
 var TFL = {"5m": "5 min", "15m": "15 min", "1h": "1 ura", "3h": "3 ure", "6h": "6 ur"};
 var STATE_NAMES = {squeeze: "squeeze", newlong: "nove pozicije ↑", newshort: "novi shorti", liq: "likvidacije", flat: "brez signala", buyp: "nakupni pritisk"};
 var HORIZ = [{k: "15m", m: 15}, {k: "1h", m: 60}, {k: "3h", m: 180}];
-var fTimer = null, futScope = "alpha", futPer = "15m", futBusy = false, futPending = false;
+var futOpen = {}, fTimer = null, futScope = "alpha", futPer = "15m", futBusy = false, futPending = false;
 var futInfo = null, futInfoAt = 0, tickCache = null, tickAt = 0, premCache = null, premAt = 0;
 var oiCache = {}, restCache = {}, klCache = {}, gVer = 0, inflight = {};
 
@@ -1782,7 +1785,7 @@ async function buySignals(){
     var cand = visibleRows().filter(function(r){
       var q = bsr(r);
       if (q == null || q < settings.bpThr || r.b1 + r.s1 < settings.minTx) return false;
-      if (!(r.h1 > 0) || !(r.price > 0) || !r.pool || !CHAINS[r.chain]) return false;
+      if (r.miss || !(r.h1 > 0) || !(r.price > 0) || !r.pool || !CHAINS[r.chain]) return false;
       var a = r.addr.toLowerCase();
       return !sigs.some(function(s){ return s.st === "buyp" && s.addr && s.addr.toLowerCase() === a && now - s.t < 3600000; });
     }).sort(function(a, b){ return bsr(b) - bsr(a); }).slice(0, 3);
@@ -2066,7 +2069,7 @@ function renderFut(list, ticks, prem, ok, near){
     var sp = tk && tk.spike;
     var spk = sp ? ' · <span class="' + (sp.x >= settings.tkThr ? "spike" : "") + '">skok prometa ' + esc(fr(sp.x)) + 'x' + (sp.ratio != null ? ' (nak./prod. ' + esc(fr(sp.ratio)) + ')' : '') + '</span>' : '';
     var st = m.st;
-    return '<details class="frow"><summary>' +
+    return '<details class="frow" data-sym="' + esc(c.sym) + '"' + (futOpen[c.sym] === false ? '' : ' open') + '><summary>' +
       '<span class="top"><span><b>' + esc(c.label) + '</b> <span class="stat">' + esc(c.sym) + '</span></span>' +
       '<span class="gv" style="color:var(--accent)">vol ' + esc(m.vx != null ? fr(m.vx) + "x" : "–") + '</span></span>' +
       '<small>' + (near ? '<span class="spike">' + (m.volOK && !m.oiOK ? 'samo volumen' : 'samo OI') + '</span> · ' : '') + (st ? '<span class="' + st.cls + '">' + esc(st.t) + '</span> · ' : '') + 'OI ' + esc(sgn(m.oc)) + ' · cena ' + esc(sgn(m.pc)) + ' (' + esc(TFL[per]) + ')</small></summary>' +
@@ -2196,7 +2199,7 @@ function checkAlerts(){
   if (!$("auto").checked) return;
   var now = Date.now();
   var hits = visibleRows().filter(function(r){
-    return r.m5 != null && r.m5 >= settings.thr &&
+    return !r.miss && r.m5 != null && r.m5 >= settings.thr &&
       (!alerted[r.addr.toLowerCase()] || now - alerted[r.addr.toLowerCase()] > 900000);
   }).sort(function(a, b){ return b.m5 - a.m5; }).slice(0, 5);
   if (!hits.length) return;
@@ -2280,6 +2283,10 @@ document.addEventListener("click", function(e){
   }
   if (t.id === "clearalerts") { alertLog = []; renderAlerts(); }
 });
+document.addEventListener("toggle", function(e){
+  var d = e.target;
+  if (d && d.classList && d.classList.contains("frow") && d.getAttribute("data-sym")) futOpen[d.getAttribute("data-sym")] = d.open;
+}, true);
 $("grefresh").addEventListener("click", scanAlpha);
 $("frefresh").addEventListener("click", scanFut);
 $("fscanlist").addEventListener("click", showScanList);
@@ -2559,8 +2566,8 @@ function otherText(){
   var s = "=== OSTALI PODATKI APLIKACIJE ===\nČas: " + new Date().toLocaleString("sl-SI") + "\n\n";
   s += "--- Največji rastoči (Alpha), zavihek " + gTab + " ---\n" + txt($("gainers")) + "\n\n";
   s += "--- Vsi Alpha žetoni (likvidnost ≥ nastavitev; sym | veriga | likv | promet 24 h | 5 min | 1 h | 6 h | 24 h) ---\n";
-  visibleRows().slice().sort(function(a, b){ return (b.h1 || -1e9) - (a.h1 || -1e9); }).slice(0, 100).forEach(function(r){
-    s += [r.sym, r.chain, usd(r.liq), usd(r.vol), sgn(r.m5), sgn(r.h1), sgn(r.h6), sgn(r.h24)].join(" | ") + "\n";
+  visibleRows().slice().sort(function(a, b){ return (b.h1 || -1e9) - (a.h1 || -1e9); }).slice(0, 400).forEach(function(r){
+    s += [r.sym, r.chain, usd(r.liq), usd(r.vol), sgn(r.m5), sgn(r.h1), sgn(r.h6), sgn(r.h24), r.miss ? "DEX-ni-viden" : ""].join(" | ") + "\n";
   });
   s += "\n--- Futures panel (" + futScope + ", " + futPer + ") ---\n" + txt($("futlist")) + "\n" + $("fstatus").textContent + "\n\n";
   s += "--- Vsi pregledani futures kovanci (kovanec | vol x | OI | cena | stanje) ---\n";
