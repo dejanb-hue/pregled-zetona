@@ -1042,7 +1042,7 @@ async function loadFlow(addr, chainKey, pair, list, gp, myRun){
   try { var mr = await fetchTradesMulti(chainKey, list, addr); trades = mergeBuf(addr, mr.trades); cov = mr; }
   catch (e) {
     err = (e instanceof TypeError) ? "GeckoTerminal ni dosegljiv (omrežje ali omejitev brskalnika)." : e.message;
-    var bf = tradeBuf[addr];
+    var bf = bufGet(addr);
     if (bf && bf.a.length >= 5) { trades = bf.a.slice(); cov = lastCov || {pools: 1, tried: 1}; err = ""; }
   }
   flowBusy = false;
@@ -2542,18 +2542,56 @@ async function fetchTradesMulti(chainKey, list, tokenAddr){
   return {trades: all, pools: okp.length, tried: pools.length, start: start};
 }
 var tradeBuf = {}, flowCtx = null, flowBusy = false;
-function mergeBuf(addr, arr){
-  var b = tradeBuf[addr] || (tradeBuf[addr] = {ids: {}, a: []});
-  arr.forEach(function(x){
-    var k = x.pl + "|" + x.w + "|" + x.blk + "|" + x.t + "|" + x.kind + "|" + x.vol;
-    if (!b.ids[k]) { b.ids[k] = 1; b.a.push(x); }
+var BUF_KEY = "ct_trd";
+function bufAll(){ try { return JSON.parse(localStorage.getItem(BUF_KEY) || "{}"); } catch (e) { return {}; } }
+function bufKey(x){ return x.pl + "|" + x.w + "|" + x.blk + "|" + x.t + "|" + x.kind + "|" + x.vol; }
+function bufGet(addr){
+  var b = tradeBuf[addr];
+  if (b) return b;
+  b = tradeBuf[addr] = {ids: {}, a: [], gaps: []};
+  var o = bufAll()[addr];
+  if (o && Array.isArray(o.a)) {
+    o.a.forEach(function(r){
+      var x = {w: r[0], blk: r[1], t: r[2], kind: r[3] ? "sell" : "buy", vol: r[4], px: r[5], pi: r[6], pl: (o.p || [])[r[7]] || ""};
+      var k = bufKey(x);
+      if (!b.ids[k]) { b.ids[k] = 1; b.a.push(x); }
+    });
+    b.gaps = Array.isArray(o.g) ? o.g : [];
+  }
+  return b;
+}
+function bufSave(addr){
+  var b = tradeBuf[addr];
+  if (!b) return;
+  var all = bufAll(), cut = Date.now() - 24 * 3600000, p = [];
+  var arr = b.a.filter(function(x){ return x.t >= cut; }).sort(function(m, n){ return m.t - n.t; }).slice(-4000);
+  var rows = arr.map(function(x){
+    var i = p.indexOf(x.pl);
+    if (i < 0) { i = p.length; p.push(x.pl); }
+    return [x.w, x.blk, x.t, x.kind === "sell" ? 1 : 0, x.vol, x.px, x.pi || 0, i];
   });
+  all[addr] = {u: Date.now(), p: p, a: rows, g: b.gaps.slice(-5)};
+  Object.keys(all).sort(function(m, n){ return all[n].u - all[m].u; }).slice(4).forEach(function(k){ delete all[k]; });
+  try { localStorage.setItem(BUF_KEY, JSON.stringify(all)); }
+  catch (e) { try { all[addr].a = all[addr].a.slice(-1500); localStorage.setItem(BUF_KEY, JSON.stringify(all)); } catch (e2) {} }
+}
+function mergeBuf(addr, arr){
+  var b = bufGet(addr);
+  var prev = b.a.length ? Math.max.apply(null, b.a.map(function(x){ return x.t; })) : null;
+  var nmin = arr.length ? Math.min.apply(null, arr.map(function(x){ return x.t; })) : null;
+  if (prev != null && nmin != null && nmin > prev + 60000) b.gaps.push([prev, nmin]);
+  arr.forEach(function(x){ var k = bufKey(x); if (!b.ids[k]) { b.ids[k] = 1; b.a.push(x); } });
   if (b.a.length > 9000) {
     b.a.sort(function(p, q){ return p.t - q.t; });
     b.a = b.a.slice(-8000); b.ids = {};
-    b.a.forEach(function(x){ b.ids[x.pl + "|" + x.w + "|" + x.blk + "|" + x.t + "|" + x.kind + "|" + x.vol] = 1; });
+    b.a.forEach(function(x){ b.ids[bufKey(x)] = 1; });
   }
+  bufSave(addr);
   return b.a.slice();
+}
+function gapTxt(an){
+  var g = ((tradeBuf[lastAddr] || {}).gaps || []).filter(function(q){ return q[1] > an.t0; });
+  return g.length ? ' <span class="thin">Luknje (stran je bila zaprta): ' + esc(g.map(function(q){ return hhmm(q[0]) + "–" + hhmm(q[1]); }).join(", ")) + '.</span>' : '';
 }
 setInterval(function(){
   if (!flowCtx || flowBusy || flowCtx[5] !== runCounter || document.visibilityState !== "visible" || document.body.getAttribute("data-t") !== "chk") return;
@@ -2565,7 +2603,7 @@ function covHtml(){
   var dur = d < 90 ? Math.max(1, Math.round(d)) + " min" : Math.floor(d / 60) + " h " + Math.round(d % 60) + " min";
   var f = function(t){ return new Date(t).toLocaleString("sl-SI", {day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit"}); };
   return '<div class="msg" style="margin:0 0 8px"><b>Zajeto:</b> ' + an.n + ' trgovanj · ' + lastCov.pools + ' od ' + lastCov.tried + ' bazenov<br>' +
-    esc(f(an.t0) + ' – ' + f(an.t1) + ' (' + dur + ')') + ' · skupaj ' + esc(usd(an.total)) + '<div id="flowwarn" class="stat" style="margin-top:4px"></div><div class="stat">Zbirka raste vsako minuto, dokler je odprt zavihek Žeton.</div></div>';
+    esc(f(an.t0) + ' – ' + f(an.t1) + ' (' + dur + ')') + ' · skupaj ' + esc(usd(an.total)) + '<div id="flowwarn" class="stat" style="margin-top:4px"></div><div class="stat">Zbirka se shranjuje v brskalnik in raste vsako minuto, dokler je odprt zavihek Žeton.' + gapTxt(an) + '</div></div>';
 }
 function updateWarn(){
   var el = $("flowwarn"), inp = $("twin");
