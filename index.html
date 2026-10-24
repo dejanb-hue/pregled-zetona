@@ -1038,8 +1038,14 @@ async function loadFlow(addr, chainKey, pair, list, gp, myRun){
   var liq = list.reduce(function(s2, x){ return s2 + ((x.liquidity && x.liquidity.usd) || 0); }, 0);
   var trades = null, err = "";
   var cov = null;
-  try { var mr = await fetchTradesMulti(chainKey, list, addr); trades = mr.trades; cov = mr; }
-  catch (e) { err = (e instanceof TypeError) ? "GeckoTerminal ni dosegljiv (omrežje ali omejitev brskalnika)." : e.message; }
+  flowBusy = true;
+  try { var mr = await fetchTradesMulti(chainKey, list, addr); trades = mergeBuf(addr, mr.trades); cov = mr; }
+  catch (e) {
+    err = (e instanceof TypeError) ? "GeckoTerminal ni dosegljiv (omrežje ali omejitev brskalnika)." : e.message;
+    var bf = tradeBuf[addr];
+    if (bf && bf.a.length >= 5) { trades = bf.a.slice(); cov = lastCov || {pools: 1, tried: 1}; err = ""; }
+  }
+  flowBusy = false;
   if (myRun !== runCounter) return;
   var an = null;
   if (trades) {
@@ -1163,6 +1169,7 @@ async function run(){
   load15(myRun);
   loadFutSum(sym, num(p.priceUsd), myRun);
   renderLogCoin(myRun);
+  flowCtx = [addr, chainKey, p, list, gp, myRun];
   loadFlow(addr, chainKey, p, list, gp, myRun);
   try { localStorage.setItem("ct_last", addr); } catch (e) {}
   out.dataset.sym = sym || "";
@@ -1542,10 +1549,10 @@ function renderGainers(){
     var v = r[key];
     return '<button class="grow" data-addr="' + esc(r.addr) + '">' +
       '<span class="gr">' + (i + 1) + '</span>' +
-      '<span class="gs"><b>' + esc(r.sym) + '</b><i>' + esc(r.chain) + '</i>' +
+      '<span class="gs"><b>' + esc(r.sym) + '</b><i>' + esc(r.chain) + '</i><span class="gv" style="color:var(--amber);margin-left:8px">' + esc(price(r.price)) + '</span>' +
       '<small>likv. <span class="' + (thin ? "thin" : "") + '">' + esc(usd(r.liq)) + '</span>' + (r.miss ? ' <span class="thin">(DEX vidi ' + esc(usd(r.dexLiq)) + ')</span>' : '') + ' · promet 24 h ' + esc(usd(r.vol)) +
       ' · 5 min ' + esc(sgn(r.m5)) + ' · 1 h ' + esc(sgn(r.h1)) + (bsr(r) != null ? ' · nak/prod 1 h <span class="' + (bsr(r) >= settings.bpThr ? 'up' : '') + '">' + esc(fr(bsr(r))) + 'x</span>' : '') + '</small><small class="gfut" id="gf' + i + '">Futures: …</small></span>' +
-      '<span style="text-align:right"><small class="stat" style="display:block">' + esc(price(r.price)) + '</small><span class="gv ' + (v < 0 ? "down" : "up") + '">' + esc(sgn(v)) + '</span></span></button>';
+      '<span class="gv ' + (v < 0 ? "down" : "up") + '">' + esc(sgn(v)) + '</span></button>';
   }).join("");
   augmentGainers(list);
 }
@@ -2150,8 +2157,8 @@ function renderFut(list, ticks, prem, ok, near){
     var spk = sp ? ' · <span class="' + (sp.x >= settings.tkThr ? "spike" : "") + '">skok prometa ' + esc(fr(sp.x)) + 'x' + (sp.ratio != null ? ' (nak./prod. ' + esc(fr(sp.ratio)) + ')' : '') + '</span>' : '';
     var st = m.st;
     return '<details class="frow" data-sym="' + esc(c.sym) + '"' + (futOpen[c.sym] === false ? '' : ' open') + '><summary>' +
-      '<span class="top"><span><b>' + esc(c.label) + '</b> <span class="stat">' + esc(c.sym) + '</span></span>' +
-      '<span style="text-align:right"><small class="stat" style="display:block">' + esc(price(t.price)) + '</small><span class="gv" style="color:var(--accent)">vol ' + esc(m.vx != null ? fr(m.vx) + "x" : "–") + '</span></span></span>' +
+      '<span class="top"><span><b>' + esc(c.label) + '</b> <span class="stat">' + esc(c.sym) + '</span> <span class="gv" style="color:var(--amber);margin-left:6px">' + esc(price(t.price)) + '</span></span>' +
+      '<span class="gv" style="color:var(--accent)">vol ' + esc(m.vx != null ? fr(m.vx) + "x" : "–") + '</span></span>' +
       '<small>' + (near ? '<span class="spike">' + (m.volOK && !m.oiOK ? 'samo volumen' : 'samo OI') + '</span> · ' : '') + (st ? '<span class="' + st.cls + '">' + esc(st.t) + '</span> · ' : '') + 'OI ' + esc(sgn(m.oc)) + ' · cena ' + esc(sgn(m.pc)) + ' (' + esc(TFL[per]) + ')</small></summary>' +
       '<small>Stanje' + infoBtn('f_state') + ': ' + esc(st ? st.t : "–") + '</small>' +
       '<small>Futures promet (USDT)' + infoBtn('f_vol') + ': ' + esc(vols) + '</small>' +
@@ -2534,13 +2541,31 @@ async function fetchTradesMulti(chainKey, list, tokenAddr){
   }); });
   return {trades: all, pools: okp.length, tried: pools.length, start: start};
 }
+var tradeBuf = {}, flowCtx = null, flowBusy = false;
+function mergeBuf(addr, arr){
+  var b = tradeBuf[addr] || (tradeBuf[addr] = {ids: {}, a: []});
+  arr.forEach(function(x){
+    var k = x.pl + "|" + x.w + "|" + x.blk + "|" + x.t + "|" + x.kind + "|" + x.vol;
+    if (!b.ids[k]) { b.ids[k] = 1; b.a.push(x); }
+  });
+  if (b.a.length > 9000) {
+    b.a.sort(function(p, q){ return p.t - q.t; });
+    b.a = b.a.slice(-8000); b.ids = {};
+    b.a.forEach(function(x){ b.ids[x.pl + "|" + x.w + "|" + x.blk + "|" + x.t + "|" + x.kind + "|" + x.vol] = 1; });
+  }
+  return b.a.slice();
+}
+setInterval(function(){
+  if (!flowCtx || flowBusy || flowCtx[5] !== runCounter || document.visibilityState !== "visible" || document.body.getAttribute("data-t") !== "chk") return;
+  loadFlow.apply(null, flowCtx);
+}, 60000);
 function covHtml(){
   if (!lastAn || !lastCov) return "";
   var an = lastAn, d = (an.t1 - an.t0) / 60000;
   var dur = d < 90 ? Math.max(1, Math.round(d)) + " min" : Math.floor(d / 60) + " h " + Math.round(d % 60) + " min";
   var f = function(t){ return new Date(t).toLocaleString("sl-SI", {day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit"}); };
   return '<div class="msg" style="margin:0 0 8px"><b>Zajeto:</b> ' + an.n + ' trgovanj · ' + lastCov.pools + ' od ' + lastCov.tried + ' bazenov<br>' +
-    esc(f(an.t0) + ' – ' + f(an.t1) + ' (' + dur + ')') + ' · skupaj ' + esc(usd(an.total)) + '<div id="flowwarn" class="stat" style="margin-top:4px"></div></div>';
+    esc(f(an.t0) + ' – ' + f(an.t1) + ' (' + dur + ')') + ' · skupaj ' + esc(usd(an.total)) + '<div id="flowwarn" class="stat" style="margin-top:4px"></div><div class="stat">Zbirka raste vsako minuto, dokler je odprt zavihek Žeton.</div></div>';
 }
 function updateWarn(){
   var el = $("flowwarn"), inp = $("twin");
