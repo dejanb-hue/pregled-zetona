@@ -285,10 +285,37 @@ var CHAINS = {
 
 var $ = function(id){return document.getElementById(id);};
 var rawFetch = window.fetch.bind(window);
-function fetch(url, opt){
+function fetchNow(url, opt){
   var c = new AbortController(), t = setTimeout(function(){ c.abort(); }, 20000);
   opt = opt || {}; opt.signal = c.signal;
   return rawFetch(url, opt).finally(function(){ clearTimeout(t); });
+}
+/* GeckoTerminal: ena vrsta za vse zahtevke (okoli 30 na minuto), uporabnikovi imajo prednost pred ozadjem */
+var gtQ = [], gtRun = false, gtLast = 0, gtSeq = 0, GT_GAP = 2100;
+function gtNext(){
+  if (gtRun || !gtQ.length) return;
+  gtQ.sort(function(a, b){ return (a.prio - b.prio) || (a.seq - b.seq); });
+  var j = gtQ.shift(); gtRun = true;
+  setTimeout(function(){
+    gtLast = Date.now();
+    fetchNow(j.url, j.opt).then(function(r){
+      if (r.status === 429) gtLast = Date.now() + 8000;
+      j.res(r);
+    }, function(e){
+      gtLast = Date.now() + 8000;
+      if (j.tries < 1 && j.prio === 0) { j.tries++; gtQ.push(j); }
+      else j.rej(new Error("GeckoTerminal je začasno omejil zahtevke ali ni dosegljiv. Poskusi znova čez minuto."));
+    }).then(function(){ gtRun = false; gtNext(); });
+  }, Math.max(0, gtLast + GT_GAP - Date.now()));
+}
+function fetch(url, opt){
+  if (String(url).indexOf("api.geckoterminal.com") < 0) return fetchNow(url, opt);
+  var prio = opt && opt.prio ? opt.prio : 0;
+  if (prio && gtQ.length > 25) return Promise.reject(new Error("GeckoTerminal: čakalna vrsta je polna."));
+  return new Promise(function(res, rej){
+    gtQ.push({url: url, opt: opt ? Object.assign({}, opt) : {}, prio: prio, seq: ++gtSeq, tries: 0, res: res, rej: rej});
+    gtNext();
+  });
 }
 var lastAddr = ""; var lastAn = null, lastTr = [], lastCov = null, lastFutOk = [];
 var runCounter = 0, curPair = null, curChain = "", candleCache = {};
@@ -864,10 +891,10 @@ function walletLink(chainKey, tokenAddr, w){
   return c.scan + "/token/" + encodeURIComponent(tokenAddr) + "?a=" + encodeURIComponent(w);
 }
 
-async function fetchTrades(chainKey, pool, tokenAddr){
+async function fetchTrades(chainKey, pool, tokenAddr, prio){
   var c = CHAINS[chainKey];
   if (!c) throw new Error("Veriga ni podprta za analizo trgovanj.");
-  var r = await fetch("https://api.geckoterminal.com/api/v2/networks/" + c.gt + "/pools/" + encodeURIComponent(pool) + "/trades");
+  var r = await fetch("https://api.geckoterminal.com/api/v2/networks/" + c.gt + "/pools/" + encodeURIComponent(pool) + "/trades", prio ? {prio: prio} : undefined);
   if (r.status === 429) throw new Error("GeckoTerminal: preveč zahtevkov. Poskusi čez minuto.");
   if (!r.ok) throw new Error("GeckoTerminal napaka " + r.status + ".");
   var j = await r.json();
@@ -1094,11 +1121,11 @@ async function run(){
   var pick = pickBest(pairs, addr), p = pick.best, list = pick.list;
   var chainKey = p.chainId;
   var chain = CHAINS[chainKey];
-  var poolNote = "", alp = null;
+  var poolNote = "", alp = null, poolFail = false;
   try {
     var mg = await mergeGtPools(chainKey, addr, list, p);
     if (mg.added) { list = mg.list; p = list[0]; poolNote = mg.note; }
-  } catch (eg2) {}
+  } catch (eg2) { poolFail = true; poolNote = "Bazenov z GeckoTerminala ni bilo mogoče naložiti (omejitev zahtevkov?). Glavni bazen morda ni viden. Tapni Osveži čez minuto."; }
   try {
     var atk = await getAlphaTokens();
     var ae = atk.filter(function(t){ return String(t.contractAddress).toLowerCase() === addr.toLowerCase(); })[0];
@@ -1109,7 +1136,7 @@ async function run(){
   try { gtd = await fetchGT(chainKey, addr); } catch (eg) {}
   sumCol = []; sumFut = null; sumCat = "m";
   var rows = marketMetrics(p, list, gtd, alp);
-  if (poolNote) rows.unshift(metric("Dodani bazeni", "iz GeckoTerminala", poolNote, "amber"));
+  if (poolNote) rows.unshift(metric("Dodani bazeni", poolFail ? "ni uspelo" : "iz GeckoTerminala", poolNote, "amber"));
   sumCat = "";
   var secRows = [], secNote = "", gp = null;
   if (chain && chain.id) {
@@ -1163,7 +1190,8 @@ async function run(){
     '<h2>Povezave</h2>' + note('Hitre povezave na zunanje strani za ta naslov.') + linkSet(addr, chainKey, p);
 
   curPair = p; curChain = chainKey;
-  curTF = {price: num(p.priceUsd), liq: (p.liquidity && num(p.liquidity.usd)) || 0, sym: sym};
+  var tl0 = list.reduce(function(a, x){ return a + ((x.liquidity && x.liquidity.usd) || 0); }, 0), ol0 = Math.max((gtd && gtd.liq) || 0, (alp && alp.liq) || 0);
+  curTF = {price: num(p.priceUsd), liq: ol0 > 2 * tl0 ? ol0 : ((p.liquidity && num(p.liquidity.usd)) || 0), sym: sym};
   renderTradeFrame();
   fillMotion();
   renderSummary();
@@ -1498,7 +1526,7 @@ async function scanAlpha(){
 var gtFixCache = {};
 async function gtMain(r){
   var cfg = CHAINS[r.chain], al = r.addr.toLowerCase();
-  var resp = await fetch("https://api.geckoterminal.com/api/v2/networks/" + cfg.gt + "/tokens/" + encodeURIComponent(r.addr) + "/pools?page=1");
+  var resp = await fetch("https://api.geckoterminal.com/api/v2/networks/" + cfg.gt + "/tokens/" + encodeURIComponent(r.addr) + "/pools?page=1", {prio: 1});
   if (!resp.ok) return null;
   var j = await resp.json(), arr = (j && j.data) || [];
   var own = arr.filter(function(x){
@@ -1519,11 +1547,11 @@ async function gtMain(r){
 }
 async function fixMiss(rows){
   var cand = rows.filter(function(r){ return r.miss && r.vol >= settings.min24 && CHAINS[r.chain]; })
-    .sort(function(a, b){ return b.vol - a.vol; }).slice(0, 20);
+    .sort(function(a, b){ return b.vol - a.vol; }).slice(0, 12);
   var now = Date.now();
   await pool(cand, 3, async function(r){
     var k = r.addr.toLowerCase(), c = gtFixCache[k];
-    if (!c || now - c.t > 90000) {
+    if (!c || now - c.t > 120000) {
       var d = null;
       try { d = await gtMain(r); } catch (e) {}
       c = gtFixCache[k] = {t: now, d: d || (c && c.d) || null};
@@ -1850,7 +1878,7 @@ async function gtPriceAt(s, at){
   if (!c || !s.pool) return null;
   var sec = Math.floor(at / 1000);
   var r = await fetch("https://api.geckoterminal.com/api/v2/networks/" + c.gt + "/pools/" + encodeURIComponent(s.pool) +
-    "/ohlcv/minute?aggregate=1&limit=3&include_empty_intervals=true&before_timestamp=" + (sec + 60));
+    "/ohlcv/minute?aggregate=1&limit=3&include_empty_intervals=true&before_timestamp=" + (sec + 60), {prio: 1});
   if (!r.ok) throw new Error("GT " + r.status);
   var j = await r.json();
   var l = j && j.data && j.data.attributes && j.data.attributes.ohlcv_list;
@@ -1875,7 +1903,7 @@ async function buySignals(){
       var r = cand[i], key = r.addr.toLowerCase(), tc = tradeCache[key];
       if (!tc || now - tc.t > 180000) {
         try {
-          var tr = await fetchTrades(r.chain, r.pool, r.addr);
+          var tr = await fetchTrades(r.chain, r.pool, r.addr, 1);
           tc = tradeCache[key] = {t: Date.now(), an: tr.length >= 5 ? analyzeTrades(tr, r.liq) : null};
         } catch (e) { continue; }
       }
