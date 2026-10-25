@@ -453,7 +453,7 @@ function levelRank(l){return l === "red" ? 2 : l === "amber" ? 1 : 0;}
 
 var sumCat = "", sumCol = [], sumFut = null;
 function metric(label, value, note, level){
-  if (sumCat) sumCol.push({label: label, value: value, level: level || ""});
+  if (sumCat) sumCol.push({label: label, value: value, level: level || "", cat: sumCat});
   return '<div class="metric"><div class="bar ' + (level||"") + '"></div>' +
     '<div class="mlabel">' + esc(label) + infoBtn(INFO_BY_LABEL[label]) + '</div><div class="mval">' + esc(value) + '</div>' +
     (note ? '<div class="mnote">' + esc(note) + '</div>' : '') + '</div>';
@@ -1054,6 +1054,7 @@ async function loadFlow(addr, chainKey, pair, list, gp, myRun){
   }
   var box2 = $("flow");
   if (!box2) return;
+  sumCol = sumCol.filter(function(x){ return x.cat !== "f"; });
   sumCat = "f";
   box2.innerHTML = (an ? flowHtml(an, chainKey, addr) : '<h2>Promet po vrsti trgovcev' + infoBtn('sec_flow') + '</h2>' + note('Kdo ustvarja promet. Vir: zadnja trgovanja do 3 največjih bazenov (GeckoTerminal), zajeto okno je prikazano spodaj. Razvrstitev je ocena po pravilih.') + '<div class="msg">' + esc(err || "Ni podatkov o trgovanjih.") + '</div>') +
     holdersHtml(gp, an, chainKey, addr) + deepLinks(addr, chainKey, list);
@@ -1476,6 +1477,7 @@ async function scanAlpha(){
       });
     });
     if (!rows.length) throw new Error("DEXScreener ni vrnil podatkov za Alpha žetone.");
+    await fixMiss(rows);
     gRows = rows;
     logSpot();
     checkAlerts();
@@ -1493,6 +1495,51 @@ async function scanAlpha(){
   gBusy = false; lastAlphaAt = Date.now();
 }
 
+var gtFixCache = {};
+async function gtMain(r){
+  var cfg = CHAINS[r.chain], al = r.addr.toLowerCase();
+  var resp = await fetch("https://api.geckoterminal.com/api/v2/networks/" + cfg.gt + "/tokens/" + encodeURIComponent(r.addr) + "/pools?page=1");
+  if (!resp.ok) return null;
+  var j = await resp.json(), arr = (j && j.data) || [];
+  var own = arr.filter(function(x){
+    var bt = x.relationships && x.relationships.base_token && x.relationships.base_token.data && x.relationships.base_token.data.id;
+    return bt && String(bt).toLowerCase().slice(-al.length) === al;
+  });
+  if (!own.length) return null;
+  var d = {liq: 0, v1: 0, v24: 0, b1: 0, s1: 0, top: null, tl: -1};
+  own.forEach(function(x){
+    var a = x.attributes || {}, res = pf(a.reserve_in_usd) || 0, vu = a.volume_usd || {}, tx = (a.transactions || {}).h1;
+    d.liq += res; d.v1 += pf(vu.h1) || 0; d.v24 += pf(vu.h24) || 0;
+    if (tx) { d.b1 += num(tx.buys) || 0; d.s1 += num(tx.sells) || 0; }
+    if (res > d.tl) { d.tl = res; d.top = a; }
+  });
+  var a2 = d.top, pc = a2.price_change_percentage || {};
+  d.price = pf(a2.base_token_price_usd); d.pl = a2.address; d.m5 = pf(pc.m5); d.h1 = pf(pc.h1); d.h6 = pf(pc.h6);
+  return d;
+}
+async function fixMiss(rows){
+  var cand = rows.filter(function(r){ return r.miss && r.vol >= settings.min24 && CHAINS[r.chain]; })
+    .sort(function(a, b){ return b.vol - a.vol; }).slice(0, 20);
+  var now = Date.now();
+  await pool(cand, 3, async function(r){
+    var k = r.addr.toLowerCase(), c = gtFixCache[k];
+    if (!c || now - c.t > 90000) {
+      var d = null;
+      try { d = await gtMain(r); } catch (e) {}
+      c = gtFixCache[k] = {t: now, d: d || (c && c.d) || null};
+    }
+    var d2 = c.d;
+    if (!d2) return;
+    if (d2.price > 0) r.price = d2.price;
+    if (d2.pl) r.pool = d2.pl;
+    if (d2.m5 != null) r.m5 = d2.m5;
+    if (d2.h1 != null) r.h1 = d2.h1;
+    if (d2.h6 != null) r.h6 = d2.h6;
+    r.v1 = Math.max(r.v1, d2.v1); r.vol = Math.max(r.vol, d2.v24); r.liq = Math.max(r.liq, d2.liq);
+    if (d2.b1 + d2.s1 > r.b1 + r.s1) { r.b1 = d2.b1; r.s1 = d2.s1; }
+    r.miss = false; r.fixed = true;
+  });
+}
 function liveOk(r){ return r.vol >= settings.min24 && r.v1 >= settings.min1h; }
 function visibleRows(){
   return gRows.filter(function(r){ return r.liq >= settings.minLiq && liveOk(r); });
