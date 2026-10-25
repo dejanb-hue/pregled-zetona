@@ -234,6 +234,11 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <p class="note">Do 5 futures kovancev z najvišjo rastjo volumna v zadnjih 6 h in do 3 Alpha kovanci brez futures (po rasti v 1 h). Vsak ima tabelo po 30 min kot v Pregledu žetona. Oranžna številka = ekstrem (promet nad 2x mediane, cena nad 3 %, OI nad pragom, taker nad 1,5 ali pod 0,67).</p>
   <div class="row" style="align-items:center;justify-content:space-between"><button class="ghost small" id="lgtop">Osveži top 6 h</button><span class="stat" id="lgtopmsg"></span></div>
   <div id="lgtopbox"></div>
+  <h2>Zdravje podatkov</h2>
+  <p class="note">Kontrolni seznam: ali so viri in kovanci popolni. Težave se beležijo, stran jih skuša sama rešiti (ponovni poskus, drug vir).</p>
+  <div class="card" id="hlcheck"></div>
+  <div class="card" id="hllog" style="overflow-x:auto;margin-top:8px"></div>
+  <div class="row" style="margin-top:8px"><button class="ghost small" id="hlclear">Počisti dnevnik težav</button></div>
   <div class="row" style="margin-top:8px"><button class="ghost small" id="lgexp">Izvozi dnevnik</button></div>
   <p class="stat">Kov. = kovanci z rastjo volumna nad pragom iz nastavitev. Signali so brez dvojnikov 15 min/1 h. Skeni: število osveževanj v uri (rumeno = luknja, zap. = zapolnjeno iz Binance svečk).</p>
   </div><div data-tab="chk">
@@ -302,6 +307,7 @@ function gtNext(){
       if (r.status === 429) gtLast = Date.now() + 8000;
       j.res(r);
     }, function(e){
+      H.gtFail++;
       gtLast = Date.now() + 8000;
       if (j.tries < 1 && j.prio === 0) { j.tries++; gtQ.push(j); }
       else j.rej(new Error("GeckoTerminal je začasno omejil zahtevke ali ni dosegljiv. Poskusi znova čez minuto."));
@@ -1455,7 +1461,7 @@ async function scanAlpha(){
   setStatus("Nalagam…");
   try {
     var toks = await getAlphaTokens();
-    var groups = {};
+    var groups = {}; var t00 = Date.now(); H.dexFail = 0; H.noData = [];
     toks.forEach(function(t){
       var c = DX_CHAIN[String(t.chainId)];
       (groups[c] = groups[c] || []).push(t);
@@ -1465,10 +1471,11 @@ async function scanAlpha(){
       var arr = groups[c];
       for (var i = 0; i < arr.length; i += 30) jobs.push({chain: c, toks: arr.slice(i, i + 30)});
     });
-    var best = {};
+    var best = {}; H.dexJobs = jobs.length;
     await pool(jobs, 4, async function(job){
       var addrs = job.toks.map(function(t){ return t.contractAddress; }).join(",");
-      var r = await fetch("https://api.dexscreener.com/tokens/v1/" + job.chain + "/" + addrs);
+      var r = await fetch("https://api.dexscreener.com/tokens/v1/" + job.chain + "/" + addrs).catch(function(e){ H.dexFail++; throw e; });
+      if (!r.ok) H.dexFail++;
       if (!r.ok) return;
       var arr = await r.json();
       if (!Array.isArray(arr)) return;
@@ -1491,7 +1498,7 @@ async function scanAlpha(){
     toks.forEach(function(t){
       var key = String(t.contractAddress).toLowerCase();
       var b = best[key];
-      if (!b) return;
+      if (!b) { if (pf(t.volume24h) >= settings.min24) H.noData.push(t.symbol); return; }
       var p = b.p, pc = p.priceChange || {};
       var o = old[key];
       var bl = pf(t.liquidity), bv = pf(t.volume24h), b24 = pf(t.percentChange24h);
@@ -1505,9 +1512,10 @@ async function scanAlpha(){
       });
     });
     if (!rows.length) throw new Error("DEXScreener ni vrnil podatkov za Alpha žetone.");
-    await fixMiss(rows);
+    rows.forEach(applyFix);
     gRows = rows;
     logSpot();
+    H.alphaMs = Date.now() - t00; healthSet("alphasrc", []); checkAlphaHealth(); fixMissBg();
     checkAlerts();
     renderGainers();
     buySignals();
@@ -1515,6 +1523,7 @@ async function scanAlpha(){
     if (gTab === "15m") compute15();
   } catch (e) {
     var net = (e instanceof TypeError);
+    healthSet("alphasrc", [{k: "sken", sym: "Alpha", msg: String(e && e.message || e)}]);
     $("gainers").innerHTML = '<div class="msg err" style="margin:8px 0">' +
       (net ? 'Podatkov ni bilo mogoče naložiti. Če imaš internet, Binance ali DEXScreener morda ne dovoljata branja iz brskalnika. Povej mi in poiščeva drugo pot.'
            : esc(e.message)) + '</div>';
@@ -1545,28 +1554,42 @@ async function gtMain(r){
   d.price = pf(a2.base_token_price_usd); d.pl = a2.address; d.m5 = pf(pc.m5); d.h1 = pf(pc.h1); d.h6 = pf(pc.h6);
   return d;
 }
-async function fixMiss(rows){
-  var cand = rows.filter(function(r){ return r.miss && r.vol >= settings.min24 && CHAINS[r.chain]; })
-    .sort(function(a, b){ return b.vol - a.vol; }).slice(0, 12);
-  var now = Date.now();
-  await pool(cand, 3, async function(r){
-    var k = r.addr.toLowerCase(), c = gtFixCache[k];
-    if (!c || now - c.t > 120000) {
+function applyD(r, d, full){
+  if (d.price > 0 && (full || !(r.price > 0))) r.price = d.price;
+  if (d.pl && full) r.pool = d.pl;
+  if (d.m5 != null && (full || r.m5 == null)) r.m5 = d.m5;
+  if (d.h1 != null && (full || r.h1 == null)) r.h1 = d.h1;
+  if (d.h6 != null && (full || r.h6 == null)) r.h6 = d.h6;
+  if (full) {
+    r.v1 = Math.max(r.v1, d.v1); r.vol = Math.max(r.vol, d.v24); r.liq = Math.max(r.liq, d.liq);
+    if (d.b1 + d.s1 > r.b1 + r.s1) { r.b1 = d.b1; r.s1 = d.s1; }
+    r.miss = false; r.fixed = true;
+  }
+}
+function applyFix(r){
+  var c = gtFixCache[r.addr.toLowerCase()];
+  if (!c || !c.d || Date.now() - c.t > 300000) return;
+  applyD(r, c.d, r.miss && c.d.liq != null);
+}
+var fixBusy = false;
+async function fixMissBg(){
+  if (fixBusy) return;
+  fixBusy = true;
+  try {
+    var cand = gRows.filter(function(r){ return (r.miss || r.fixed) && r.vol >= settings.min24 && CHAINS[r.chain]; })
+      .sort(function(a, b){ return b.vol - a.vol; }).slice(0, 12);
+    var did = 0;
+    for (var i = 0; i < cand.length; i++) {
+      var r = cand[i], k = r.addr.toLowerCase(), c = gtFixCache[k];
+      if (c && Date.now() - c.t < 120000) continue;
       var d = null;
       try { d = await gtMain(r); } catch (e) {}
-      c = gtFixCache[k] = {t: now, d: d || (c && c.d) || null};
+      gtFixCache[k] = {t: Date.now(), d: d || (c && c.d) || null};
+      if (gtFixCache[k].d) { applyD(r, gtFixCache[k].d, true); did++; }
     }
-    var d2 = c.d;
-    if (!d2) return;
-    if (d2.price > 0) r.price = d2.price;
-    if (d2.pl) r.pool = d2.pl;
-    if (d2.m5 != null) r.m5 = d2.m5;
-    if (d2.h1 != null) r.h1 = d2.h1;
-    if (d2.h6 != null) r.h6 = d2.h6;
-    r.v1 = Math.max(r.v1, d2.v1); r.vol = Math.max(r.vol, d2.v24); r.liq = Math.max(r.liq, d2.liq);
-    if (d2.b1 + d2.s1 > r.b1 + r.s1) { r.b1 = d2.b1; r.s1 = d2.s1; }
-    r.miss = false; r.fixed = true;
-  });
+    if (did) { renderGainers(); checkAlphaHealth(); }
+  } catch (e0) {}
+  fixBusy = false;
 }
 function liveOk(r){ return r.vol >= settings.min24 && r.v1 >= settings.min1h; }
 function visibleRows(){
@@ -1633,7 +1656,7 @@ function renderGainers(){
 }
 
 /* ---------- Binance Futures ---------- */
-var FAPI = "https://fapi.binance.com";
+var FAPI = "https://fapi.binance.com"; var fBackoff = 0;
 var TFL = {"5m": "5 min", "15m": "15 min", "1h": "1 ura", "3h": "3 ure", "6h": "6 ur"};
 var STATE_NAMES = {squeeze: "squeeze", newlong: "nove pozicije ↑", newshort: "novi shorti", liq: "likvidacije", flat: "brez signala", buyp: "nakupni pritisk"};
 var HORIZ = [{k: "15m", m: 15}, {k: "1h", m: 60}, {k: "3h", m: 180}];
@@ -1649,7 +1672,7 @@ function memo(key, fn){
 }
 async function fj(path){
   var r = await fetch(FAPI + path);
-  if (r.status === 429 || r.status === 418) throw new Error("Binance Futures: preveč zahtevkov. Počakaj minuto.");
+  if (r.status === 429 || r.status === 418) { fBackoff = Date.now() + 60000; throw new Error("Binance Futures: preveč zahtevkov. Počakaj minuto."); }
   if (!r.ok) throw new Error("Binance Futures napaka " + r.status + ".");
   return r.json();
 }
@@ -1970,6 +1993,90 @@ function logSpot(){
   });
   saveLog(L);
 }
+var H = {dexJobs: 0, dexFail: 0, noData: [], alphaMs: 0, futN: 0, gtFail: 0};
+var HK = "ct_health", hOpen = {}, hLog = [], hiddenAt = 0;
+function hLoad(){ try { hLog = JSON.parse(localStorage.getItem(HK) || "[]"); } catch (e) { hLog = []; } }
+function hSave(){ try { localStorage.setItem(HK, JSON.stringify(hLog.slice(-300))); } catch (e) {} }
+function healthSet(src, list){
+  var now = Date.now(), cur = {}, ch = false;
+  list.forEach(function(p){ cur[src + "|" + p.k + "|" + p.sym] = p; });
+  Object.keys(cur).forEach(function(k){
+    var o = hOpen[k];
+    if (!o) { hOpen[k] = {src: src, k: cur[k].k, sym: cur[k].sym, addr: cur[k].addr, msg: cur[k].msg, t0: now, n: 1, heal: 0, hl: 0}; ch = true; }
+    else { o.n++; o.msg = cur[k].msg; }
+  });
+  Object.keys(hOpen).forEach(function(k){
+    var o = hOpen[k];
+    if (o.src === src && !cur[k]) { hLog.push({k: o.k, sym: o.sym, msg: o.msg, t0: o.t0, t1: now, n: o.n, heal: o.heal}); delete hOpen[k]; ch = true; }
+  });
+  if (ch) hSave();
+  if (src === "alpha") {
+    var todo = Object.keys(hOpen).map(function(k){ return hOpen[k]; }).filter(function(o){ return o.src === "alpha" && o.addr && o.heal < 2 && now - o.hl > 30000; }).slice(0, 3);
+    if (todo.length) healAlpha(todo);
+  }
+  renderHealth();
+}
+function checkAlphaHealth(){
+  var list = [];
+  gRows.forEach(function(r){
+    if (r.vol < settings.min24) return;
+    var a = r.addr.toLowerCase(), add = function(k, msg){ list.push({k: k, sym: r.sym, addr: a, msg: msg}); };
+    if (r.miss && !r.fixed) add("glavni bazen ni viden", "likv. DEX " + usd(r.dexLiq) + " proti " + usd(r.liq));
+    else if (!(r.price > 0)) add("brez cene", "");
+    else if (liveOk(r) && r.m5 == null) add("brez 5 min", "morda ni trgovanj");
+    else if (liveOk(r) && r.h1 == null) add("brez 1 h", "");
+  });
+  healthSet("alpha", list);
+}
+async function healAlpha(todo){
+  for (var i = 0; i < todo.length; i++) {
+    var o = todo[i], r = gRows.filter(function(x){ return x.addr.toLowerCase() === o.addr; })[0];
+    o.heal++; o.hl = Date.now();
+    if (!r) continue;
+    var d = null;
+    try { if (CHAINS[r.chain]) d = await gtMain(r); } catch (e) {}
+    if (!d) {
+      try {
+        var pr = await fetchDex(r.addr);
+        if (pr.length) { var b = pickBest(pr, r.addr).best, pc = b.priceChange || {}; d = {price: num(b.priceUsd), m5: num(pc.m5), h1: num(pc.h1), h6: num(pc.h6)}; }
+      } catch (e2) {}
+    }
+    if (d) { gtFixCache[o.addr] = {t: Date.now(), d: d}; applyD(r, d, !!(d.liq != null && r.miss)); }
+  }
+  renderGainers(); checkAlphaHealth();
+}
+function durTxt(ms){ var m = ms / 60000; return m < 1.5 ? Math.round(ms / 1000) + " s" : m < 90 ? Math.round(m) + " min" : (m / 60).toFixed(1).replace(".", ",") + " h"; }
+function healthText(){
+  var s = "\n--- Zdravje podatkov (odprto in rešeno: kovanec | težava | od | trajanje | skenov | poskusov popravka) ---\n";
+  Object.keys(hOpen).forEach(function(k){ var o = hOpen[k]; s += [o.sym, o.k, hhmm(o.t0), "odprto " + durTxt(Date.now() - o.t0), o.n, o.heal].join(" | ") + "\n"; });
+  hLog.slice(-80).forEach(function(o){ s += [o.sym, o.k, new Date(o.t0).toLocaleString("sl-SI"), durTxt(o.t1 - o.t0), o.n, o.heal].join(" | ") + "\n"; });
+  return s;
+}
+function renderHealth(){
+  var box = $("hlcheck"), lg = $("hllog");
+  if (!box || !lg) return;
+  var now = Date.now(), open = Object.keys(hOpen).map(function(k){ return hOpen[k]; });
+  var by = function(src){ return open.filter(function(o){ return o.src === src; }); };
+  var ageA = lastAlphaAt ? Math.round((now - lastAlphaAt) / 1000) : null, ageF = lastFutAt ? Math.round((now - lastFutAt) / 1000) : null;
+  var al = by("alpha"), fu = by("fut").concat(by("futrest"));
+  var h = "";
+  h += metric("Alpha seznam in DEXScreener", ageA == null ? "še ni" : "pred " + ageA + " s",
+    "Paketov " + H.dexJobs + ", neuspelih " + H.dexFail + ". Sken traja " + (H.alphaMs / 1000).toFixed(1).replace(".", ",") + " s. Brez DEX podatkov (promet 24 h nad pragom): " + (H.noData.length ? H.noData.join(", ") : "nobenega") + "." + (by("alphasrc").length ? " Napaka: " + by("alphasrc")[0].msg : ""),
+    (H.dexFail || by("alphasrc").length) ? "red" : (H.noData.length || (ageA != null && ageA > 120)) ? "amber" : "green");
+  h += metric("Alpha kovanci z luknjami", String(al.length), al.length ? al.slice(0, 10).map(function(o){ return o.sym + ": " + o.k; }).join(", ") + ". Stran jih sama ponovno poskuša (največ 2 krat, nato ostane v dnevniku)." : "Vsi kovanci nad pragom imajo ceno in spremembe.", al.length ? "amber" : "green");
+  h += metric("Futures sken", ageF == null ? "še ni" : "pred " + ageF + " s",
+    "Pregledanih " + H.futN + ", z luknjami " + fu.length + (fu.length ? " (" + fu.slice(0, 8).map(function(o){ return o.sym; }).join(", ") + ")" : "") + (by("futsrc").length ? ". Napaka: " + by("futsrc")[0].msg : "") + (fBackoff > now ? ". Binance je omejil, počitek še " + Math.round((fBackoff - now) / 1000) + " s" : "") + ".",
+    (by("futsrc").length || fBackoff > now) ? "red" : (fu.length || (ageF != null && ageF > 240)) ? "amber" : "green");
+  h += metric("GeckoTerminal vrsta", gtQ.length + " čaka", "Neuspelih zahtevkov od odprtja strani: " + H.gtFail + ".", gtQ.length > 10 || H.gtFail > 5 ? "amber" : "green");
+  box.innerHTML = h;
+  var rows = open.map(function(o){ return {o: o, open: true, t0: o.t0, d: now - o.t0}; })
+    .concat(hLog.slice(-30).reverse().map(function(o){ return {o: o, open: false, t0: o.t0, d: o.t1 - o.t0}; }));
+  lg.innerHTML = rows.length ? '<table class="pairs motion"><thead><tr><th>Od</th><th>Trajanje</th><th>Kovanec</th><th>Težava</th><th>Pop.</th></tr></thead><tbody>' +
+    rows.slice(0, 40).map(function(x){
+      return '<tr><td>' + esc(hhmm(x.t0)) + '</td><td>' + (x.open ? '<span class="thin">odprto ' : '') + esc(durTxt(x.d)) + (x.open ? '</span>' : '') + '</td><td>' + esc(x.o.sym) + '</td><td>' + esc(x.o.k + (x.o.msg ? " (" + x.o.msg + ")" : "")) + '</td><td>' + (x.o.heal || 0) + '</td></tr>';
+    }).join("") + '</tbody></table><div class="cap">Pop. = poskusov samodejnega popravka. Zgodovina se hrani v tej napravi (zadnjih 300) in je v gumbu »Kopiraj: ostali podatki«.</div>' : '<div class="loading">Ni zabeleženih težav.</div>';
+}
+hLoad();
 /* ---------- beleženje signalov ---------- */
 var SIG_KEY = "ct_sig";
 var OI_MAX = 50;
@@ -2093,6 +2200,7 @@ function renderSigs(){
 }
 
 async function scanFut(){
+  if (Date.now() < fBackoff) { futPending = false; renderHealth(); return; }
   if (futBusy) { futPending = true; return; }
   futBusy = true; fBusyAt = Date.now();
   var box = $("futlist");
@@ -2127,10 +2235,13 @@ async function scanFut(){
       $("fstatus").textContent = "";
     } else {
       await pool(cands, 5, async function(c){
-        try { c.oi = await getOI(c.sym); } catch (e1) {}
-        try { c.kl = await getKl(c.sym); } catch (e2) {}
+        try { c.oi = await getOI(c.sym).catch(function(){ delete oiCache[c.sym]; return getOI(c.sym); }); } catch (e1) {}
+        try { c.kl = await getKl(c.sym).catch(function(){ delete klCache[c.sym]; return getKl(c.sym); }); } catch (e2) {}
       });
       var ok = cands.filter(function(c){ return c.oi && c.kl; });
+      H.futN = ok.length;
+      healthSet("fut", cands.filter(function(c){ return c.addr && !(c.oi && c.kl); }).map(function(c){ return {k: "OI/svečke", sym: c.label, msg: (c.oi ? "" : "brez OI ") + (c.kl ? "" : "brez svečk")}; }));
+      healthSet("futsrc", []);
       if (!ok.length) throw new Error("Podatkov o OI in volumnu ni bilo mogoče naložiti.");
       ok.forEach(function(c){ c.m = evalCand(c, futPer); }); lastFutOk = ok;
       var passed = ok.filter(function(c){ return passCond(c.m); })
@@ -2142,6 +2253,7 @@ async function scanFut(){
         near = ranked.length > 0;
       }
       await pool(ranked, 5, async function(c){ c.rest = await getRest(c.sym); });
+      healthSet("futrest", ranked.filter(function(c){ return c.addr && !(c.rest && c.rest.gl && c.rest.tk); }).map(function(c){ return {k: "L/S ali taker", sym: c.label, msg: ""}; }));
       var okL = ok.filter(function(c){ return c.addr; });
       if (okL.length) { calcLeaders(okL); renderLeaders(); }
       logHist(okL, ticks, prem); logScan(okL, ticks);
@@ -2151,13 +2263,13 @@ async function scanFut(){
       announceSignals(added);
       renderFut(ranked, ticks, prem, ok, near);
       $("fstatus").textContent = ok.length + " pregledanih · " + new Date().toLocaleTimeString("sl-SI");
-      try { await resolveSigs(); } catch (e3) {} renderLog();
+      resolveSigs().then(function(){ renderSigs(); renderLog(); }, function(){}); renderLog();
       renderSigs(); renderTrend();
     }
   } catch (e) {
     box.innerHTML = '<div class="msg err" style="margin:8px 0">' +
       (e instanceof TypeError ? "Futures podatkov ni bilo mogoče naložiti. Binance morda ne dovoli branja iz brskalnika. Pošlji mi posnetek in poiščeva drugo pot." : esc(e.message)) + '</div>';
-    $("fstatus").textContent = "Napaka";
+    $("fstatus").textContent = "Napaka"; healthSet("futsrc", [{k: "sken", sym: "Futures", msg: String(e && e.message || e)}]);
   }
   futBusy = false; lastFutAt = Date.now();
   if (futPending) { futPending = false; scanFut(); }
@@ -2385,6 +2497,7 @@ async function setWake(on){
 function watchdog(){
   if (!$("auto").checked) return;
   var now = Date.now();
+  healthSet("stale", [].concat(now - lastAlphaAt > 120000 ? [{k: "zastarelo", sym: "Alpha", msg: "zadnji sken pred " + Math.round((now - lastAlphaAt) / 1000) + " s"}] : [], now - lastFutAt > 240000 ? [{k: "zastarelo", sym: "Futures", msg: "zadnji sken pred " + Math.round((now - lastFutAt) / 1000) + " s"}] : []));
   if (gBusy && now - gBusyAt > 60000) gBusy = false;
   if (futBusy && now - fBusyAt > 120000) { futBusy = false; futPending = false; }
   if (!gBusy && now - Math.max(lastAlphaAt, gBusyAt) > 75000) scanAlpha();
@@ -2406,7 +2519,9 @@ function setAuto(on){
 }
 
 document.addEventListener("visibilitychange", function(){
-  if (document.visibilityState !== "visible") return;
+  if (document.visibilityState !== "visible") { hiddenAt = Date.now(); return; }
+  if (hiddenAt && Date.now() - hiddenAt > 120000) { hLog.push({k: "stran uspana", sym: "–", msg: "Stran je bila v ozadju, skeni so stali.", t0: hiddenAt, t1: Date.now(), n: 1, heal: 0}); hSave(); renderHealth(); }
+  hiddenAt = 0;
   if ($("auto").checked) { setWake(true); scanAlpha(); scanFut(); }
   if (settings.autoFill) setTimeout(fillGaps, 4000);
 });
@@ -2807,7 +2922,7 @@ function otherText(){
       s += [k.replace(/USDT$/, ""), hhmm(x.t), String(+Number(x.px).toPrecision(5)), sgn(x.p15), sgn(x.o15), fr(x.vx), x.vv == null ? "–" : usd(x.vv), fr(x.tk), fr(x.ls), x.f == null ? "–" : fr3(x.f) + " %"].join(" | ") + "\n";
     });
   });
-  s += logText() + "\n--- Signali (skupine) ---\n" + txt($("sigbox")) + "\n\n--- Vsi signali (kovanec | okno | stanje | čas | cena | vol | OI | cena% | funding | izid 15m/1h/3h) ---\n";
+  s += logText() + healthText() + "\n--- Signali (skupine) ---\n" + txt($("sigbox")) + "\n\n--- Vsi signali (kovanec | okno | stanje | čas | cena | vol | OI | cena% | funding | izid 15m/1h/3h) ---\n";
   loadSigs().forEach(function(x){
     s += [x.label, x.per, x.st, new Date(x.t).toLocaleString("sl-SI"), price(x.p0), fr(x.vx) + "x", sgn(x.oc), sgn(x.pc), x.fund == null ? "–" : fr3(x.fund * 100) + " %",
       ["15m", "1h", "3h"].map(function(k){ var v = x.o && x.o[k]; return typeof v === "number" ? sgn(v) : "…"; }).join("/")].join(" | ") + "\n";
@@ -3246,7 +3361,8 @@ $("anapaste").addEventListener("click", async function(){
 });
 renderSigs(); renderTrend();
 try { if (!localStorage.getItem("ct_mig2")) { localStorage.removeItem(LOG_KEY); localStorage.removeItem(DAY_KEY); localStorage.setItem("ct_mig2", "1"); } } catch (e) {}
-$("auto").checked = settings.auto; $("autofill").checked = settings.autoFill; renderLog(); renderLeaders();
+$("auto").checked = settings.auto; $("autofill").checked = settings.autoFill; renderLog(); renderLeaders(); renderHealth();
+$("hlclear").addEventListener("click", function(){ hLog = []; hSave(); renderHealth(); });
 scanAlpha().then(scanFut).then(function(){ if (settings.autoFill) fillGaps(); });
 if (settings.auto) setAuto(true);
 
