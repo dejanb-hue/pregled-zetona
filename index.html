@@ -181,6 +181,7 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
       </select>
     </label>
     <label><span>Voditelji: najmanjši futures promet 6 h</span><span><input type="number" id="leadvol" min="0.1" step="0.5" inputmode="decimal"> M$</span></label>
+    <label><span>Push na telefon: ntfy.sh tema (neobvezno)</span><input type="text" id="ntfy" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:150px;flex:none;padding:8px;font-size:14px"></label>
     <label><span>Ob odprtju zapolni luknje v dnevniku (24 h)</span><input type="checkbox" id="autofill"></label>
     <label><span>Samodejno osveževanje (30 s) in opozorila<span class="info" role="button" tabindex="0" data-info="set_auto" aria-label="Razlaga">ⓘ</span></span><input type="checkbox" id="auto"></label>
     <div class="row" style="align-items:center;justify-content:space-between">
@@ -1405,7 +1406,7 @@ var DX_CHAIN = {"56":"bsc","1":"ethereum","8453":"base","42161":"arbitrum","137"
 var gBusyAt = 0, fBusyAt = 0, lastAlphaAt = 0, lastFutAt = 0, wd = null;
 var alphaTokens = null, alphaAt = 0, gRows = [], gTab = "15m", gBusy = false, k15Busy = false, gTimer = null;
 var alerted = {}, alertLog = [], audioCtx = null, wakeLock = null, k15Fail = false;
-var settings = {auto: false, autoFill: true, thr: 10, minLiq: 10000, oiThr: 3, tkThr: 3, volX: 2, oiMin: 2, bpThr: 1.8, usdThr: 1.3, minTx: 100, min24: 2000000, min1h: 100000, leadVol: 2000000, cond: "both", tf: {amt: 100, stop: 5, tgt: 10, fee: 0.25}};
+var settings = {auto: false, autoFill: true, thr: 10, minLiq: 10000, oiThr: 3, tkThr: 3, volX: 2, oiMin: 2, bpThr: 1.8, usdThr: 1.3, minTx: 100, ntfy: "", min24: 2000000, min1h: 100000, leadVol: 2000000, cond: "both", tf: {amt: 100, stop: 5, tgt: 10, fee: 0.25}};
 
 function loadSettings(){
   try {
@@ -1418,6 +1419,7 @@ function loadSettings(){
     if (num(o.usdThr) != null && o.usdThr >= 1) settings.usdThr = num(o.usdThr);
     if (num(o.volX) != null && o.volX > 0) settings.volX = num(o.volX);
     if (num(o.oiMin) != null && o.oiMin > 0) settings.oiMin = num(o.oiMin);
+    if (typeof o.ntfy === "string") settings.ntfy = o.ntfy;
     if (num(o.leadVol) != null && o.leadVol > 0) settings.leadVol = num(o.leadVol);
     if (o.cond === "both" || o.cond === "any" || o.cond === "none") settings.cond = o.cond;
     if (typeof o.auto === "boolean") settings.auto = o.auto;
@@ -1577,11 +1579,11 @@ async function fixMissBg(){
   fixBusy = true;
   try {
     var cand = gRows.filter(function(r){ return (r.miss || r.fixed) && r.vol >= settings.min24 && CHAINS[r.chain]; })
-      .sort(function(a, b){ return b.vol - a.vol; }).slice(0, 12);
+      .sort(function(a, b){ var ca = gtFixCache[a.addr.toLowerCase()], cb = gtFixCache[b.addr.toLowerCase()]; return (ca ? ca.t : 0) - (cb ? cb.t : 0); }).slice(0, 10);
     var did = 0;
     for (var i = 0; i < cand.length; i++) {
       var r = cand[i], k = r.addr.toLowerCase(), c = gtFixCache[k];
-      if (c && Date.now() - c.t < 120000) continue;
+      if (c && Date.now() - c.t < 150000) continue;
       var d = null;
       try { d = await gtMain(r); } catch (e) {}
       gtFixCache[k] = {t: Date.now(), d: d || (c && c.d) || null};
@@ -2398,7 +2400,42 @@ function checkTakerAlerts(list){
   pingAlert(hits[0].c.label + " taker promet " + fr(hits[0].sp.x) + "x", "Nakupi/prodaje " + fr(hits[0].sp.ratio));
 }
 
+var catching = false;
+async function catchUp(from){
+  if (catching || !$("auto").checked) return;
+  catching = true;
+  try {
+    var info = await getFutInfo(), ticks = await getTicks();
+    if (!gRows.length) await scanAlpha();
+    var list = alphaFutList(info, ticks).slice(0, 40), found = [];
+    await pool(list, 4, async function(c){
+      var k = await fj("/fapi/v1/klines?symbol=" + c.sym + "&interval=5m&limit=100"), oi = null;
+      try { oi = await fj("/futures/data/openInterestHist?symbol=" + c.sym + "&period=5m&limit=100"); } catch (e0) {}
+      var oiAt = {};
+      if (oi) oi.forEach(function(x){ oiAt[Math.floor(Number(x.timestamp) / 300000)] = pf(x.sumOpenInterest); });
+      k.forEach(function(x){
+        if (x[0] < from - 300000) return;
+        var o = pf(x[1]), cl = pf(x[4]), pc = o > 0 ? (cl / o - 1) * 100 : null, i = Math.floor(x[0] / 300000);
+        var a = oiAt[i], b = oiAt[i - 1], oc = (a > 0 && b > 0) ? (a / b - 1) * 100 : null;
+        if ((pc != null && pc >= settings.thr) || (oc != null && Math.abs(oc) >= settings.oiThr)) found.push({c: c, t: x[0], pc: pc, oc: oc});
+      });
+    });
+    var nowS = new Date().toLocaleTimeString("sl-SI");
+    found.sort(function(p, q){ return q.t - p.t; });
+    found.slice(0, 8).forEach(function(f){
+      alertLog.unshift({sym: f.c.label, addr: f.c.addr, rest: "zamujeno ob " + hhmm(f.t) + ": cena " + sgn(f.pc) + " · OI " + sgn(f.oc) + " v 5 min", time: nowS});
+    });
+    if (!found.length) alertLog.unshift({sym: "Odsotnost", rest: hhmm(from) + "–" + hhmm(Date.now()) + ": ni zamujenih premikov (cena ≥ " + settings.thr + " %, OI ≥ " + settings.oiThr + " % v 5 min)", time: nowS});
+    alertLog = alertLog.slice(0, 10);
+    renderAlerts();
+    if (found.length) pingAlert("Zamujeno: " + found.length + " premikov", found[0].c.label + " ob " + hhmm(found[0].t));
+  } catch (e) {}
+  catching = false;
+}
 function pingAlert(title, body){
+  try {
+    if (settings.ntfy) fetchNow("https://ntfy.sh", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({topic: settings.ntfy, title: title, message: body || ""})}).catch(function(){});
+  } catch (e) {}
   beep();
   try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {}
   try {
@@ -2520,7 +2557,7 @@ function setAuto(on){
 
 document.addEventListener("visibilitychange", function(){
   if (document.visibilityState !== "visible") { hiddenAt = Date.now(); return; }
-  if (hiddenAt && Date.now() - hiddenAt > 120000) { hLog.push({k: "stran uspana", sym: "–", msg: "Stran je bila v ozadju, skeni so stali.", t0: hiddenAt, t1: Date.now(), n: 1, heal: 0}); hSave(); renderHealth(); }
+  if (hiddenAt && Date.now() - hiddenAt > 120000) { hLog.push({k: "stran uspana", sym: "–", msg: "Stran je bila v ozadju, skeni so stali.", t0: hiddenAt, t1: Date.now(), n: 1, heal: 0}); hSave(); renderHealth(); catchUp(hiddenAt); }
   hiddenAt = 0;
   if ($("auto").checked) { setWake(true); scanAlpha(); scanFut(); }
   if (settings.autoFill) setTimeout(fillGaps, 4000);
@@ -2952,6 +2989,8 @@ $("fcond").value = settings.cond;
 $("volx").value = settings.volX;
 $("oimin").value = settings.oiMin;
 $("leadvol").value = settings.leadVol / 1e6;
+$("ntfy").value = settings.ntfy;
+$("ntfy").addEventListener("change", function(){ settings.ntfy = this.value.trim(); saveSettings(); });
 $("leadvol").addEventListener("change", function(){ var v = num(this.value.replace(",", ".")); settings.leadVol = (v && v > 0) ? v * 1e6 : 2e6; this.value = settings.leadVol / 1e6; saveSettings(); });
 function histBlock(sym, H){
   var a = ((H || {})[sym] || []).filter(function(x){ return x.t > Date.now() - 2 * 3600000; });
