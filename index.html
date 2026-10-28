@@ -1503,21 +1503,42 @@ async function scanAlpha(){
     });
     var old = {};
     gRows.forEach(function(r){ old[r.addr.toLowerCase()] = r; });
+    var tot = 0, sus = 0;
+    toks.forEach(function(t){
+      var k0 = String(t.contractAddress).toLowerCase(), o0 = old[k0], b0 = best[k0];
+      if (!o0 || !(pf(t.volume24h) >= settings.min24) || !(o0.v1 > 0 || o0.price > 0)) return;
+      tot++;
+      if (!b0 || !(b0.v1 > 0) || !(num(b0.p.priceUsd) > 0)) sus++;
+    });
+    if (gRows.length && tot >= 8 && sus / tot >= 0.4 && (H.badN || 0) < 20) {
+      H.badN = (H.badN || 0) + 1;
+      healthSet("alphasrc", [{k: "slab sken", sym: "Alpha", msg: sus + " od " + tot + " žetonov brez cene ali prometa 1 h, ohranjam prejšnje podatke"}]);
+      setStatus("Slab sken (" + sus + "/" + tot + "), ohranjam prejšnje");
+      gBusy = false; lastAlphaAt = Date.now();
+      return;
+    }
+    H.badN = 0;
     var rows = [];
     toks.forEach(function(t){
       var key = String(t.contractAddress).toLowerCase();
-      var b = best[key];
-      if (!b) { if (pf(t.volume24h) >= settings.min24) H.noData.push(t.symbol); return; }
+      var b = best[key], o = old[key];
+      if (!b) {
+        if (pf(t.volume24h) >= settings.min24) H.noData.push(t.symbol);
+        if (o && (o.stale || 0) < 10 && o.price > 0) { o.stale = (o.stale || 0) + 1; o.jumpNew = false; rows.push(o); }
+        return;
+      }
       var p = b.p, pc = p.priceChange || {};
-      var o = old[key];
       var bl = pf(t.liquidity), bv = pf(t.volume24h), b24 = pf(t.percentChange24h);
       var miss = bl > 2 * b.l;
-      var jv = jumpCalc(o, b.v1);
+      var px = num(p.priceUsd), v1 = b.v1, m5 = num(pc.m5), h1 = num(pc.h1), h6 = num(pc.h6), stl = 0;
+      if (o && !(px > 0) && o.price > 0 && (o.stale || 0) < 10) { px = o.price; m5 = o.m5; h1 = o.h1; h6 = o.h6; stl = (o.stale || 0) + 1; }
+      if (o && !(v1 > 0) && o.v1 > 0 && (o.stale || 0) < 10) { v1 = o.v1; stl = Math.max(stl, (o.stale || 0) + 1); }
+      var jv = jumpCalc(o, v1);
       rows.push({
         sym: t.symbol, addr: t.contractAddress, chain: p.chainId, alphaId: t.alphaId,
-        m5: num(pc.m5), h1: num(pc.h1), h6: num(pc.h6), h24: b24 != null ? b24 : num(pc.h24),
+        m5: m5, h1: h1, h6: h6, h24: b24 != null ? b24 : num(pc.h24),
         dexLiq: b.l, miss: miss,
-        liq: Math.max(b.l, bl || 0), vol: Math.max(b.vol, bv || 0), price: num(p.priceUsd), v1: b.v1, b1: b.b1, s1: b.s1, b5: b.b5, s5: b.s5, pool: p.pairAddress,
+        liq: Math.max(b.l, bl || 0), vol: Math.max(b.vol, bv || 0), price: px, v1: v1, stale: stl, b1: b.b1, s1: b.s1, b5: b.b5, s5: b.s5, pool: p.pairAddress,
         c15: o ? o.c15 : null, c15At: o ? o.c15At : 0,
         vh: jv.vh, jumpAt: jv.at, jump: jv.on, jumpNew: jv.nw, jbase: jv.base
       });
@@ -1625,6 +1646,7 @@ async function fixMissBg(){
   } catch (e0) {}
   fixBusy = false;
 }
+function futOk(r){ return r.vol >= settings.min24 || !!r.jump; }
 function liveOk(r){ return (r.vol >= settings.min24 && r.v1 >= settings.min1h) || !!r.jump; }
 function visibleRows(){
   return gRows.filter(function(r){ return r.liq >= settings.minLiq && liveOk(r); });
@@ -1983,7 +2005,7 @@ async function buySignals(){
 function alphaFutList(info, ticks){
   var seen = {}, out = [];
   gRows.forEach(function(r){
-    var e = liveOk(r) ? matchFut(r, info, ticks) : null;
+    var e = futOk(r) ? matchFut(r, info, ticks) : null;
     if (e && !seen[e.symbol]) { seen[e.symbol] = 1; out.push({sym: e.symbol, label: r.sym, addr: r.addr, qv: (ticks[e.symbol] && ticks[e.symbol].qv) || 0}); }
   });
   return out.sort(function(a, b){ return b.qv - a.qv; });
@@ -2030,6 +2052,22 @@ function logSpot(){
 var H = {dexJobs: 0, dexFail: 0, noData: [], alphaMs: 0, futN: 0, gtFail: 0};
 var HK = "ct_health", hOpen = {}, hLog = [], hiddenAt = 0;
 function hLoad(){ try { hLog = JSON.parse(localStorage.getItem(HK) || "[]"); } catch (e) { hLog = []; } }
+function hMerge(e, arr){
+  for (var i = arr.length - 1; i >= 0 && i >= arr.length - 200; i--) {
+    var x = arr[i];
+    if (x.k === e.k && x.sym === e.sym) {
+      if (e.t0 - x.t1 < 600000) { x.t1 = Math.max(x.t1, e.t1); x.n += e.n; x.heal = Math.max(x.heal || 0, e.heal || 0); x.cnt = (x.cnt || 1) + (e.cnt || 1); x.msg = e.msg; return; }
+      break;
+    }
+  }
+  arr.push(e);
+}
+function hCompact(){
+  var src = hLog.slice().sort(function(a, b){ return a.t0 - b.t0; });
+  hLog = [];
+  src.forEach(function(e){ hMerge(e, hLog); });
+  hSave();
+}
 function hSave(){ try { localStorage.setItem(HK, JSON.stringify(hLog.slice(-300))); } catch (e) {} }
 function healthSet(src, list){
   var now = Date.now(), cur = {}, ch = false;
@@ -2041,7 +2079,7 @@ function healthSet(src, list){
   });
   Object.keys(hOpen).forEach(function(k){
     var o = hOpen[k];
-    if (o.src === src && !cur[k]) { hLog.push({k: o.k, sym: o.sym, msg: o.msg, t0: o.t0, t1: now, n: o.n, heal: o.heal}); delete hOpen[k]; ch = true; }
+    if (o.src === src && !cur[k]) { hMerge({k: o.k, sym: o.sym, msg: o.msg, t0: o.t0, t1: now, n: o.n, heal: o.heal, cnt: 1}, hLog); delete hOpen[k]; ch = true; }
   });
   if (ch) hSave();
   if (src === "alpha") {
@@ -2084,7 +2122,7 @@ function durTxt(ms){ var m = ms / 60000; return m < 1.5 ? Math.round(ms / 1000) 
 function healthText(){
   var s = "\n--- Zdravje podatkov (odprto in rešeno: kovanec | težava | od | trajanje | skenov | poskusov popravka) ---\n";
   Object.keys(hOpen).forEach(function(k){ var o = hOpen[k]; s += [o.sym, o.k, hhmm(o.t0), "odprto " + durTxt(Date.now() - o.t0), o.n, o.heal].join(" | ") + "\n"; });
-  hLog.slice(-80).forEach(function(o){ s += [o.sym, o.k, new Date(o.t0).toLocaleString("sl-SI"), durTxt(o.t1 - o.t0), o.n, o.heal].join(" | ") + "\n"; });
+  hLog.slice(-80).forEach(function(o){ s += [o.sym, o.k + (o.cnt > 1 ? " ×" + o.cnt : ""), new Date(o.t0).toLocaleString("sl-SI"), durTxt(o.t1 - o.t0), o.n, o.heal].join(" | ") + "\n"; });
   return s;
 }
 function renderHealth(){
@@ -2109,14 +2147,18 @@ function renderHealth(){
     .concat(hLog.slice(-30).reverse().map(function(o){ return {o: o, open: false, t0: o.t0, d: o.t1 - o.t0}; }));
   lg.innerHTML = rows.length ? '<table class="pairs motion"><thead><tr><th>Od</th><th>Trajanje</th><th>Kovanec</th><th>Težava</th><th>Pop.</th></tr></thead><tbody>' +
     rows.slice(0, 40).map(function(x){
-      return '<tr><td>' + esc(hhmm(x.t0)) + '</td><td>' + (x.open ? '<span class="thin">odprto ' : '') + esc(durTxt(x.d)) + (x.open ? '</span>' : '') + '</td><td>' + esc(x.o.sym) + '</td><td>' + esc(x.o.k + (x.o.msg ? " (" + x.o.msg + ")" : "")) + '</td><td>' + (x.o.heal || 0) + '</td></tr>';
+      return '<tr><td>' + esc(hhmm(x.t0)) + '</td><td>' + (x.open ? '<span class="thin">odprto ' : '') + esc(durTxt(x.d)) + (x.open ? '</span>' : '') + '</td><td>' + esc(x.o.sym) + '</td><td>' + esc(x.o.k + (x.o.cnt > 1 ? " ×" + x.o.cnt : "") + (x.o.msg ? " (" + x.o.msg + ")" : "")) + '</td><td>' + (x.o.heal || 0) + '</td></tr>';
     }).join("") + '</tbody></table><div class="cap">Pop. = poskusov samodejnega popravka. Zgodovina se hrani v tej napravi (zadnjih 300) in je v gumbu »Kopiraj: ostali podatki«.</div>' : '<div class="loading">Ni zabeleženih težav.</div>';
 }
-hLoad();
+hLoad(); hCompact();
 /* ---------- beleženje signalov ---------- */
 var SIG_KEY = "ct_sig";
 var OI_MAX = 50;
-function sigOk(s){ return !(s && s.oc != null && Math.abs(s.oc) > OI_MAX); }
+function sigOk(s){
+  if (s && s.oc != null && Math.abs(s.oc) > OI_MAX) return false;
+  if (s && s.st === "a_jump" && typeof s.msg === "string" && /prej \$0\)/.test(s.msg)) return false;
+  return true;
+}
 function loadSigs(){ try { return JSON.parse(localStorage.getItem(SIG_KEY) || "[]"); } catch (e) { return []; } }
 function saveSigs(a){ try { localStorage.setItem(SIG_KEY, JSON.stringify(a)); } catch (e) {} }
 
@@ -2193,8 +2235,11 @@ function jumpCalc(o, v1){
   hist.push([now, v1]);
   var wasOn = !!(o && o.jumpAt && now - o.jumpAt < 1800000), at = wasOn ? o.jumpAt : 0, nw = false, base = wasOn ? (o.jbase != null ? o.jbase : null) : null;
   if (!wasOn && hist.length > 1 && now - hist[0][0] >= 300000) {
-    base = Math.min.apply(null, hist.slice(0, -1).map(function(x){ return x[1]; }));
-    if (v1 >= 50000 && v1 >= 3 * Math.max(base, 10000)) { at = now; nw = true; }
+    var prevV = hist.slice(0, -1).map(function(x){ return x[1]; }).filter(function(v){ return v > 0; });
+    if (prevV.length >= 3 && prevV.length >= (hist.length - 1) * 0.8) {
+      base = Math.min.apply(null, prevV);
+      if (v1 >= 50000 && v1 >= 3 * Math.max(base, 10000)) { at = now; nw = true; }
+    }
   }
   return {vh: hist, at: at, on: !!at && now - at < 1800000, nw: nw, base: base};
 }
@@ -2302,7 +2347,7 @@ function renderSigs(){
   var sg = sigs.filter(function(s){ return !isAl(s); }), al = sigs.filter(isAl);
   var rhtml = sigs.slice(-8).reverse().map(evRow).join("");
   box.innerHTML =
-    '<div class="cap">Skupaj ' + sigWord(sg.length) + ' in ' + al.length + ' opozoril' + (dups ? ' (brez ' + dups + ' dvojnikov)' : '') + (bad.length ? ' (izločeno zaradi sumljivega OI nad ' + OI_MAX + ' %: ' + bad.length + ')' : '') + '. Tapni skupino ali kovanec za podrobnosti. ' + infoBtn('s_read') + '</div>' +
+    '<div class="cap">Skupaj ' + sigWord(sg.length) + ' in ' + al.length + ' opozoril' + (dups ? ' (brez ' + dups + ' dvojnikov)' : '') + (bad.length ? ' (izločeno kot sumljivo, OI nad ' + OI_MAX + ' % ali lažni skok prometa »prej $0«: ' + bad.length + ')' : '') + '. Tapni skupino ali kovanec za podrobnosti. ' + infoBtn('s_read') + '</div>' +
     '<div class="cap" style="margin-top:8px"><b>Signali</b></div>' + grpHtml(sg, false) +
     '<div class="cap" style="margin-top:12px"><b>Opozorila</b> (cena, OI, taker, skok prometa) z izidi po 15 min, 30 min, 1 h in 3 h</div>' + grpHtml(al, true) +
     '<div class="cap" style="margin-top:12px"><b>Združeno po kovancih</b> (tapni kovanec za seznam)</div>' + coinGroupHtml(sigs) +
@@ -2324,7 +2369,7 @@ async function scanFut(){
     if (futScope === "alpha") {
       if (!gRows.length) await scanAlpha();
       gRows.forEach(function(r){
-        var e = liveOk(r) ? matchFut(r, info, ticks) : null;
+        var e = futOk(r) ? matchFut(r, info, ticks) : null;
         if (e && !seen[e.symbol]) {
           seen[e.symbol] = 1;
           cands.push({sym: e.symbol, label: r.sym, addr: r.addr, qv: (ticks[e.symbol] && ticks[e.symbol].qv) || 0});
@@ -3493,7 +3538,7 @@ function analyze(t){
     var f = fm[x.s.toUpperCase()]; return [esc(x.s), cv(x.h1), f.vx == null ? "–" : esc(fr(f.vx)) + "x", cv(f.oc), esc(f.st)];
   });
   h += tbl("Spot + futures: največji gibalci 1 h", ["Žeton", "Spot 1 h", "Vol", "OI", "Stanje"], cb);
-  var sg = rowsOf(sec(S, "Vsi signali"), 10).map(function(r){ return {s: r[0], per: r[1], st: r[2], oc: pnum(r[6]), o: r[9].split("/").map(pnum)}; });
+  var sg = rowsOf(sec(S, "Vsi signali"), 10).map(function(r){ return {s: r[0], per: r[1], st: r[2], oc: pnum(r[6]), msg: r[10] || "", o: r[9].split("/").map(pnum)}; });
   var okS = sg.filter(sigOk), bad = sg.filter(function(x){ return !sigOk(x); });
   var cell = function(a, i){
     var v = a.map(function(x){ return x.o[i]; }).filter(function(z){ return z != null; });
@@ -3512,7 +3557,7 @@ function analyze(t){
   var bc = {}; okS.forEach(function(x){ (bc[x.s] = bc[x.s] || []).push(x); });
   h += tbl("Signali in opozorila po kovancih (top 8)", ["Kovanec", "n", "15 min", "1 h"], Object.keys(bc).sort(function(a, b){ return bc[b].length - bc[a].length; }).slice(0, 8).map(function(k){ return [esc(k), String(bc[k].length), cell(bc[k], 0), cell(bc[k], 2)]; }));
   h += tbl("Dogodki po kovancih (sig. / opoz. / zadnji / povpr. 15m/30m/1h)", ["Kovanec", "Sig.", "Opoz.", "Zadnji", "Izid"], rowsOf(sec(S, "Dogodki po kovancih"), 5).slice(0, 10).map(function(r){ return [esc(r[0]), esc(r[1]), esc(r[2]), esc(r[3]), esc(r[4])]; }));
-  if (sg.length) h += '<div class="cap">Veljavnih signalov: ' + okS.length + '.' + (bad.length ? ' Izločeno (|OI| nad ' + OI_MAX + ' %): ' + bad.length + ' (' + esc(bad.map(function(x){ return x.s; }).join(", ")) + ').' : '') + ' Brez primerjave z nesignalnimi kovanci to ni dokaz.</div>';
+  if (sg.length) h += '<div class="cap">Veljavnih signalov: ' + okS.length + '.' + (bad.length ? ' Izločeno (sumljivo, OI ali lažni skok): ' + bad.length + ' (' + esc(bad.map(function(x){ return x.s; }).join(", ")) + ').' : '') + ' Brez primerjave z nesignalnimi kovanci to ni dokaz.</div>';
   var hr = rowsOf(sec(S, "Zgodovina posnetkov"), 10).map(function(r){ return {s: r[0], px: parseFloat(r[2]), vx: pnum(r[5]), tk: pnum(r[7]), f: pnum(r[9])}; });
   var hg = {}, ho = [];
   hr.forEach(function(x){ if (!hg[x.s]) { hg[x.s] = []; ho.push(x.s); } hg[x.s].push(x); });
