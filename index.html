@@ -144,6 +144,7 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 #tabbar{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
 #tabbar button{flex:1;background:transparent;color:var(--muted);border-radius:0;min-height:54px;padding:0 1px;font-size:11px}
 #tabbar button.on{color:var(--accent);box-shadow:inset 0 2px 0 var(--accent)}
+.wrow{display:flex;align-items:center;gap:10px;font-size:14px;margin-top:8px}.wrow span{min-width:26px}.wrow input[type=range]{flex:1;min-width:0;height:28px}
 </style>
 </head>
 <body>
@@ -237,6 +238,11 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <p class="note">Do 5 futures kovancev z najvišjo rastjo volumna v zadnjih 6 h in do 3 Alpha kovanci brez futures (po rasti v 1 h). Vsak ima tabelo po 30 min kot v Pregledu žetona. Oranžna številka = ekstrem (promet nad 2x mediane, cena nad 3 %, OI nad pragom, taker nad 1,5 ali pod 0,67).</p>
   <div class="row" style="align-items:center;justify-content:space-between"><button class="ghost small" id="lgtop">Osveži top 6 h</button><span class="stat" id="lgtopmsg"></span></div>
   <div id="lgtopbox"></div>
+  <h2>Promet po vrsti trgovcev · zbirka</h2>
+  <p class="note">Kovanci, za katere si v zavihku Žeton zbiral trgovanja (največ 4, zadnjih 24 h). Zbira se, dokler je zavihek Žeton odprt. Razvrstitev je ocena po pravilih. Trak izbere časovno okno za vse kovance.</p>
+  <div id="dwinbox"></div>
+  <div class="row" style="align-items:center;justify-content:space-between;margin:8px 0"><button class="ghost small" id="dtrref">Osveži</button><span class="stat">Neto = nakupi minus prodaje brez botov</span></div>
+  <div id="dtrbox"></div>
   <h2>Zdravje podatkov</h2>
   <p class="note">Kontrolni seznam: ali so viri in kovanci popolni. Težave se beležijo, stran jih skuša sama rešiti (ponovni poskus, drug vir).</p>
   <div class="card" id="hlcheck"></div>
@@ -326,6 +332,7 @@ function fetch(url, opt){
     gtNext();
   });
 }
+var WIN = {f: {rel: null, from: null, to: null}, d: {rel: null, from: null, to: null}}, WSPAN = {f: null, d: null}, wDragging = "", wTimer = {}, flowData = null, lastSpan = null, lastAllN = 0, bufMeta = {};
 var lastAddr = ""; var lastAn = null, lastTr = [], lastCov = null, lastFutOk = [];
 var runCounter = 0, curPair = null, curChain = "", candleCache = {};
 
@@ -1072,6 +1079,7 @@ async function loadFlow(addr, chainKey, pair, list, gp, myRun){
   var box = $("flow");
   if (!box) return;
   var liq = list.reduce(function(s2, x){ return s2 + ((x.liquidity && x.liquidity.usd) || 0); }, 0);
+  bufMeta[addr] = {s: (pair.baseToken && pair.baseToken.symbol) || "", c: chainKey, l: Math.round(liq)};
   var trades = null, err = "";
   var cov = null;
   flowBusy = true;
@@ -1083,10 +1091,28 @@ async function loadFlow(addr, chainKey, pair, list, gp, myRun){
   }
   flowBusy = false;
   if (myRun !== runCounter) return;
-  var an = null;
+  flowData = {addr: addr, chainKey: chainKey, list: list, gp: gp, liq: liq, trades: trades, cov: cov, err: err, run: myRun};
+  drawFlow(flowData);
+}
+function spanOf(arr){
+  if (!arr || !arr.length) return null;
+  var a = Infinity, b = -Infinity;
+  for (var i = 0; i < arr.length; i++) { var t = arr[i].t; if (t < a) a = t; if (t > b) b = t; }
+  return {t0: a, t1: b};
+}
+function drawFlow(fd){
+  if (fd.run !== runCounter) return;
+  var addr = fd.addr, chainKey = fd.chainKey, list = fd.list, gp = fd.gp, trades = fd.trades, err = fd.err, an = null;
+  var sp = spanOf(trades), tw = trades;
+  WSPAN.f = sp; lastSpan = sp; lastAllN = trades ? trades.length : 0;
+  if (trades && sp) {
+    var wr = winRange("f");
+    if (wr.from > sp.t0 || wr.to < sp.t1) tw = trades.filter(function(x){ return x.t >= wr.from && x.t <= wr.to; });
+  }
+  lastAn = null; lastTr = [];
   if (trades) {
-    if (trades.length >= 5) { an = analyzeTrades(trades, liq); lastAn = an; lastTr = trades; lastCov = cov; }
-    else err = "Premalo trgovanj za analizo (" + trades.length + ").";
+    if (tw.length >= 5) { an = analyzeTrades(tw, fd.liq); lastAn = an; lastTr = tw; lastCov = fd.cov; }
+    else err = trades.length < 5 ? "Premalo trgovanj za analizo (" + trades.length + ")." : "V izbranem oknu je premalo trgovanj (" + tw.length + "). Razširi okno ali tapni Vse.";
   }
   var box2 = $("flow");
   if (!box2) return;
@@ -1097,6 +1123,7 @@ async function loadFlow(addr, chainKey, pair, list, gp, myRun){
   var dpb = $("deep"); if (dpb) dpb.innerHTML = deepLinks(addr, chainKey, list);
   sumCat = "";
   renderSummary();
+  winSync("f");
   updateWarn();
 }
 
@@ -1112,7 +1139,8 @@ async function run(){
     out.innerHTML = '<div class="msg err">Naslov ni videti veljaven. Naslov na BNB Chain, Base ali Ethereumu se začne z 0x in ima 42 znakov. Naslov na Solani ima 32 do 44 znakov brez 0x.</div>';
     return;
   }
-  lastAddr = addr; lastAn = null; lastTr = []; lastCov = null;
+  var sameCoin = (addr === lastAddr); lastAddr = addr; lastAn = null; lastTr = []; lastCov = null; flowData = null; lastSpan = null; WSPAN.f = null;
+  if (!sameCoin) { WIN.f = {rel: null, from: null, to: null}; if (/\d{1,2}:\d{2}\s*[-–]\s*\d{1,2}:\d{2}/.test($("twin").value)) twinApply(); }
   var myRun = ++runCounter; candleCache = {};
   out.innerHTML = '<div class="loading">Nalagam podatke…</div>';
 
@@ -1191,6 +1219,7 @@ async function run(){
     '<h2>Zadnjih 6 ur po 30 min' + infoBtn('sec_h6') + '</h2>' + note('Spot (GeckoTerminal, glavni bazen) in futures (Binance), če ima žeton par. Podatki se povlečejo ob preverjanju.') + '<div class="card" id="h6" style="overflow-x:auto"><div class="loading">Nalagam…</div></div>' +
     '<h2>Dnevnik (24 h po urah)' + infoBtn('sec_log') + '</h2>' + note('Zapisi iz zavihka Dnevnik za ta kovanec (futures).') + '<div class="card" id="lgcoin" style="overflow-x:auto"><div class="loading">Nalagam…</div></div>' +
     '<h2>Signali in opozorila</h2>' + note('Zabeleženi signali in opozorila za ta kovanec, z izidi po 15 min, 30 min, 1 h in 3 h.') + '<div class="card" id="coinev" style="padding:4px 10px"></div>' +
+    '<h2>Časovno okno trgovanj</h2>' + note('Zbrana trgovanja lahko segajo daleč nazaj. S trakom ali s časom zgoraj (npr. 04:25-06:15) izbereš okno, ki te zanima. Velja za razdelka Promet po vrsti trgovcev in Top imetniki ter za kopiranje.') + winCtlHtml("f") +
     '<div id="flow"><div class="loading">Nalagam promet in imetnike…</div></div>' +
     '<h2>Okvir trejda' + infoBtn('sec_okvir') + '</h2>' + note('Izračun za tvoj znesek: zdrs, stroški in razmerje dobiček : tveganje. Podatki: cena in likvidnost glavnega para.') + '<div class="card" id="tframe"></div>' +
     '<h2>Trg</h2>' + note('Razmerja iz DEXScreenerja, likvidnost in promet po potrebi iz GeckoTerminala (večja vrednost). Zeleno = nižje, rumeno = previdnost, rdeče = visoko tveganje. Pragovi so splošna pravila, ne jamstvo.') + '<div class="card">' + rows.join("") + '</div>' +
@@ -1201,6 +1230,7 @@ async function run(){
     '<div id="deep"></div><h2>Povezave</h2>' + note('Hitre povezave na zunanje strani za ta naslov.') + linkSet(addr, chainKey, p);
 
   curPair = p; curChain = chainKey;
+  winSync("f");
   var tl0 = list.reduce(function(a, x){ return a + ((x.liquidity && x.liquidity.usd) || 0); }, 0), ol0 = Math.max((gtd && gtd.liq) || 0, (alp && alp.liq) || 0);
   curTF = {price: num(p.priceUsd), liq: ol0 > 2 * tl0 ? ol0 : ((p.liquidity && num(p.liquidity.usd)) || 0), sym: sym};
   renderTradeFrame();
@@ -2975,7 +3005,8 @@ function bufSave(addr){
     if (i < 0) { i = p.length; p.push(x.pl); }
     return [x.w, x.blk, x.t, x.kind === "sell" ? 1 : 0, x.vol, x.px, x.pi || 0, i];
   });
-  all[addr] = {u: Date.now(), p: p, a: rows, g: b.gaps.slice(-5)};
+  var mm = bufMeta[addr] || (all[addr] && all[addr].m) || null;
+  all[addr] = {u: Date.now(), p: p, a: rows, g: b.gaps.slice(-5), m: mm};
   Object.keys(all).sort(function(m, n){ return all[n].u - all[m].u; }).slice(4).forEach(function(k){ delete all[k]; });
   try { localStorage.setItem(BUF_KEY, JSON.stringify(all)); }
   catch (e) { try { all[addr].a = all[addr].a.slice(-1500); localStorage.setItem(BUF_KEY, JSON.stringify(all)); } catch (e2) {} }
@@ -3008,18 +3039,18 @@ function covHtml(){
   var dur = d < 90 ? Math.max(1, Math.round(d)) + " min" : Math.floor(d / 60) + " h " + Math.round(d % 60) + " min";
   var f = function(t){ return new Date(t).toLocaleString("sl-SI", {day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit"}); };
   return '<div class="msg" style="margin:0 0 8px"><b>Zajeto:</b> ' + an.n + ' trgovanj · ' + lastCov.pools + ' od ' + lastCov.tried + ' bazenov<br>' +
-    esc(f(an.t0) + ' – ' + f(an.t1) + ' (' + dur + ')') + ' · skupaj ' + esc(usd(an.total)) + '<div id="flowwarn" class="stat" style="margin-top:4px"></div><div class="stat">Zbirka se shranjuje v brskalnik in raste vsako minuto, dokler je odprt zavihek Žeton.' + gapTxt(an) + '</div></div>';
+    esc(f(an.t0) + ' – ' + f(an.t1) + ' (' + dur + ')') + ' · skupaj ' + esc(usd(an.total)) + (lastSpan && lastAllN > an.n ? '<div class="stat">Izbrano okno. V zbirki je skupaj ' + lastAllN + ' trgovanj (' + esc(f(lastSpan.t0) + ' – ' + f(lastSpan.t1)) + ').</div>' : '') + '<div id="flowwarn" class="stat" style="margin-top:4px"></div><div class="stat">Zbirka se shranjuje v brskalnik in raste vsako minuto, dokler je odprt zavihek Žeton.' + gapTxt(an) + '</div></div>';
 }
 function updateWarn(){
   var el = $("flowwarn"), inp = $("twin");
   if (!el || !lastAn) return;
   var m = inp && inp.value.match(/(\d{1,2}):(\d{2})\s*[-–]\s*(\d{1,2}):(\d{2})/);
-  if (!m) { el.textContent = (lastAn.t1 - lastAn.t0 < 6 * 3600000) ? "Okno je krajše od 6 h. Starejša trgovanja poglej prek povezav spodaj." : ""; return; }
+  if (!m) { el.textContent = ((lastSpan ? lastSpan.t1 - lastSpan.t0 : lastAn.t1 - lastAn.t0) < 6 * 3600000) ? "Okno je krajše od 6 h. Starejša trgovanja poglej prek povezav spodaj." : ""; return; }
   var now = new Date(), st = new Date(now);
   st.setHours(+m[1], +m[2], 0, 0);
   if (st > now) st.setDate(st.getDate() - 1);
-  var ok = lastAn.t0 <= st.getTime(), lab = inp.value.trim();
-  el.innerHTML = ok ? 'Okno pokriva ' + esc(lab) + '.' : '<span class="thin">⚠ Ne pokriva ' + esc(lab) + '. Zajeto okno se začne ob ' + esc(hhmm(lastAn.t0)) + '.</span>';
+  var t00 = lastSpan ? lastSpan.t0 : lastAn.t0, ok = t00 <= st.getTime(), lab = inp.value.trim();
+  el.innerHTML = ok ? 'Okno pokriva ' + esc(lab) + '.' : '<span class="thin">⚠ Ne pokriva ' + esc(lab) + '. Zajeto okno se začne ob ' + esc(hhmm(t00)) + '.</span>';
 }
 function deepLinks(addr, chainKey, list){
   var c = CHAINS[chainKey], l = [];
@@ -3137,7 +3168,7 @@ function otherText(){
       s += [k.replace(/USDT$/, ""), hhmm(x.t), String(+Number(x.px).toPrecision(5)), sgn(x.p15), sgn(x.o15), fr(x.vx), x.vv == null ? "–" : usd(x.vv), fr(x.tk), fr(x.ls), x.f == null ? "–" : fr3(x.f) + " %"].join(" | ") + "\n";
     });
   });
-  s += logText() + healthText() + "\n--- Signali (skupine) ---\n" + txt($("sigbox")) + "\n\n--- Vsi signali (kovanec | okno | stanje | čas | cena | vol | OI | cena% | funding | izid 15m/30m/1h/3h | opis) ---\n";
+  s += logText() + healthText() + tradersText() + "\n--- Signali (skupine) ---\n" + txt($("sigbox")) + "\n\n--- Vsi signali (kovanec | okno | stanje | čas | cena | vol | OI | cena% | funding | izid 15m/30m/1h/3h | opis) ---\n";
   loadSigs().forEach(function(x){
     s += [x.label, x.per, x.st, new Date(x.t).toLocaleString("sl-SI"), price(x.p0), fr(x.vx) + "x", sgn(x.oc), sgn(x.pc), x.fund == null ? "–" : fr3(x.fund * 100) + " %",
       ["15m", "30m", "1h", "3h"].map(function(k){ var v = x.o && x.o[k]; return typeof v === "number" ? sgn(v) : "…"; }).join("/"), x.msg || ""].join(" | ") + "\n";
@@ -3476,11 +3507,186 @@ async function renderTop6(force){
   top6Busy = false;
 }
 $("lgtop").addEventListener("click", function(){ renderTop6(true); });
+
+/* ---------- časovno okno (trak) in promet po trgovcih v dnevniku ---------- */
+function fdt(t){ return new Date(t).toLocaleString("sl-SI", {day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit"}); }
+function winCtlHtml(p){
+  return '<div class="card" style="padding:10px 12px"><div class="stat" id="' + p + 'wl">Ni zbranih trgovanj.</div>' +
+    '<label class="wrow"><span>Od</span><input type="range" id="' + p + 'wf" min="0" max="1" value="0" step="1" disabled></label>' +
+    '<label class="wrow"><span>Do</span><input type="range" id="' + p + 'wt" min="0" max="1" value="1" step="1" disabled></label>' +
+    '<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:8px">' +
+    [["all", "Vse"], ["60", "Zadnja 1 h"], ["180", "3 h"], ["360", "6 h"]].map(function(x){ return '<button class="ghost small" data-wp="' + p + ':' + x[0] + '">' + x[1] + '</button>'; }).join("") +
+    '</div></div>';
+}
+function winRange(p){
+  var sp = WSPAN[p], w = WIN[p];
+  if (!sp) return {from: 0, to: Infinity};
+  return {from: w.rel ? sp.t1 - w.rel : (w.from != null ? w.from : 0), to: w.to != null ? w.to + 59999 : Infinity};
+}
+function winSync(p){
+  var sp = WSPAN[p], f = $(p + "wf"), t = $(p + "wt"), l = $(p + "wl");
+  if (!f || !t || !l) return;
+  if (!sp) { l.textContent = "Ni zbranih trgovanj."; f.disabled = true; t.disabled = true; return; }
+  f.disabled = false; t.disabled = false;
+  var base = Math.floor(sp.t0 / 60000) * 60000, max = Math.max(1, Math.ceil((sp.t1 - base) / 60000)), w = WIN[p], r = winRange(p);
+  var ft = r.from > 0 ? Math.max(r.from, sp.t0) : sp.t0, tt = r.to === Infinity ? sp.t1 : Math.min(w.to, sp.t1);
+  if (wDragging !== p) {
+    f.max = max; t.max = max;
+    f.value = Math.max(0, Math.min(max, Math.round((ft - base) / 60000)));
+    t.value = r.to === Infinity ? max : Math.max(0, Math.min(max, Math.round((tt - base) / 60000)));
+  }
+  var rl = w.rel ? " (zadnjih " + (w.rel >= 3600000 ? (w.rel / 3600000) + " h" : (w.rel / 60000) + " min") + ")" : ((r.from <= 0 && r.to === Infinity) ? " (vse)" : "");
+  l.textContent = "Okno: " + fdt(ft) + " – " + fdt(tt) + rl + ". Zbirka: " + fdt(sp.t0) + " – " + fdt(sp.t1) + ".";
+}
+function twinFromWin(){
+  var inp = $("twin"), sp = WSPAN.f, w = WIN.f;
+  if (!inp) return;
+  if (!sp || (!w.rel && w.from == null && w.to == null)) { inp.value = ""; return; }
+  var r = winRange("f");
+  inp.value = hhmm(r.from > 0 ? Math.max(r.from, sp.t0) : sp.t0) + "-" + hhmm(r.to === Infinity ? sp.t1 : Math.min(w.to, sp.t1));
+}
+function twinApply(){
+  var inp = $("twin");
+  if (!inp) return;
+  var m = inp.value.match(/(\d{1,2}):(\d{2})\s*[-–]\s*(\d{1,2}):(\d{2})/), w = WIN.f;
+  if (!m) { if (!inp.value.trim()) { WIN.f = {rel: null, from: null, to: null}; winApply("f", true); } return; }
+  var now = new Date(), st = new Date(now), en;
+  st.setHours(+m[1], +m[2], 0, 0);
+  if (st > now) st.setDate(st.getDate() - 1);
+  en = new Date(st); en.setHours(+m[3], +m[4], 0, 0);
+  if (en <= st) en.setDate(en.getDate() + 1);
+  WIN.f = {rel: null, from: st.getTime(), to: en.getTime()};
+  winApply("f", true);
+}
+function winApply(p, fromTwin){
+  if (p === "f") {
+    if (!fromTwin) twinFromWin();
+    if (flowData) drawFlow(flowData); else winSync("f");
+  } else renderTraders();
+}
+function winSchedule(p){ clearTimeout(wTimer[p]); wTimer[p] = setTimeout(function(){ winApply(p, false); }, 120); }
+document.addEventListener("pointerdown", function(e){ var id = e.target && e.target.id; if (id && /^[fd]w[ft]$/.test(id)) wDragging = id.charAt(0); });
+function wUp(){ var p = wDragging; wDragging = ""; if (p) winSync(p); }
+document.addEventListener("pointerup", wUp);
+document.addEventListener("pointercancel", wUp);
+document.addEventListener("input", function(e){
+  var id = e.target && e.target.id;
+  if (!id || !/^[fd]w[ft]$/.test(id)) return;
+  var p = id.charAt(0), sp = WSPAN[p];
+  if (!sp) return;
+  var f = $(p + "wf"), t = $(p + "wt"), base = Math.floor(sp.t0 / 60000) * 60000, max = +f.max, fv = +f.value, tv = +t.value;
+  if (id.charAt(2) === "f" && fv > tv) { tv = fv; t.value = tv; }
+  if (id.charAt(2) === "t" && tv < fv) { fv = tv; f.value = fv; }
+  WIN[p] = {rel: null, from: fv <= 0 ? null : base + fv * 60000, to: tv >= max ? null : base + tv * 60000};
+  winSync(p);
+  winSchedule(p);
+});
+document.addEventListener("click", function(e){
+  var b = e.target && e.target.closest ? e.target.closest("[data-wp]") : null;
+  if (!b) return;
+  var q = b.getAttribute("data-wp").split(":"), p = q[0];
+  WIN[p] = q[1] === "all" ? {rel: null, from: null, to: null} : {rel: (+q[1]) * 60000, from: null, to: null};
+  winApply(p, false);
+});
+$("twin").addEventListener("input", function(){ clearTimeout(wTimer.tw); wTimer.tw = setTimeout(twinApply, 600); });
+
+function tradersData(){
+  var all = bufAll(), out = [], watch = loadWatch();
+  Object.keys(all).forEach(function(addr){
+    var o = all[addr];
+    if (!o || !Array.isArray(o.a) || !o.a.length) return;
+    var m = o.m || {}, lc = addr.toLowerCase();
+    var row = gRows.filter(function(r){ return r.addr.toLowerCase() === lc; })[0];
+    var wi = watch.filter(function(x){ return String(x.addr).toLowerCase() === lc; })[0];
+    var tr = o.a.map(function(r){ return {w: r[0], blk: r[1], t: r[2], kind: r[3] ? "sell" : "buy", vol: r[4], px: r[5], pi: r[6], pl: (o.p || [])[r[7]] || ""}; });
+    out.push({addr: addr, sym: m.s || (row && row.sym) || (wi && wi.sym) || shortA(addr), chain: m.c || (row && row.chain) || "", liq: m.l || (row && row.liq) || 0, tr: tr, u: o.u || 0, gaps: o.g || []});
+  });
+  out.sort(function(a, b){ return b.u - a.u; });
+  return out;
+}
+function trCompute(){
+  var D = tradersData(), t0 = Infinity, t1 = -Infinity;
+  D.forEach(function(c){ c.tr.forEach(function(x){ if (x.t < t0) t0 = x.t; if (x.t > t1) t1 = x.t; }); });
+  WSPAN.d = isFinite(t0) ? {t0: t0, t1: t1} : null;
+  var r = winRange("d");
+  D.forEach(function(c){
+    c.tw = c.tr.filter(function(x){ return x.t >= r.from && x.t <= r.to; });
+    c.an = c.tw.length >= 5 ? analyzeTrades(c.tw, c.liq) : null;
+  });
+  return D;
+}
+function trNet(c){ var q = c.an.cls; return (q.normal.buy + q.whale.buy) - (q.normal.sell + q.whale.sell); }
+function trHours(c){
+  var hb = {};
+  c.tw.forEach(function(x){
+    var h = Math.floor(x.t / 3600000), b = hb[h] || (hb[h] = {h: h, n: 0, v: 0, normal: 0, whale: 0, bot: 0, net: 0});
+    var w = c.an.wal[x.w.toLowerCase()], k = w ? w.cls : "normal";
+    b.n++; b.v += x.vol; b[k] += x.vol;
+    if (k !== "bot") b.net += x.kind === "buy" ? x.vol : -x.vol;
+  });
+  return Object.keys(hb).map(Number).sort(function(a, b){ return b - a; }).map(function(h){ return hb[h]; });
+}
+function pc0(v, t){ return t > 0 ? Math.round(v / t * 100) + " %" : "–"; }
+function netSpan(v){ return '<span class="' + (v < 0 ? "down" : "up") + '">' + esc(usdS(v)) + '</span>'; }
+function renderTraders(){
+  var box = $("dtrbox");
+  if (!box) return;
+  var D = trCompute();
+  winSync("d");
+  if (!D.length) { box.innerHTML = '<div class="msg">Zbirka je prazna. Preveri žeton v zavihku Žeton in pusti zavihek odprt, trgovanja se zbirajo vsako minuto.</div>'; return; }
+  var rows = D.map(function(c){
+    if (!c.an) return '<tr><td>' + esc(c.sym) + '</td><td>' + c.tw.length + '</td><td colspan="5" class="stat">premalo trgovanj v oknu</td></tr>';
+    var q = c.an.cls, t = c.an.total;
+    return '<tr><td>' + esc(c.sym) + '</td><td>' + c.an.n + '</td><td>' + esc(usd(t)) + '</td><td>' + pc0(q.normal.vol, t) + '</td><td>' + pc0(q.whale.vol, t) + '</td><td>' + pc0(q.bot.vol, t) + '</td><td>' + netSpan(trNet(c)) + '</td></tr>';
+  }).join("");
+  var names = {normal: "Normalni trgovci", whale: "Kiti (velika trgovanja)", bot: "Boti in lovci na točke"}, order = ["normal", "whale", "bot"], cn = {normal: "normalen", whale: "kit", bot: "bot"};
+  var legend = '<span style="color:var(--accent)">■</span> normalni · <span style="color:var(--amber)">■</span> kiti · <span style="color:var(--muted)">■</span> boti';
+  var det = D.filter(function(c){ return c.an; }).map(function(c){
+    var an = c.an;
+    var seg = order.map(function(k){ return '<span class="c-' + k + '" style="width:' + (an.total ? an.cls[k].vol / an.total * 100 : 0).toFixed(1) + '%"></span>'; }).join("");
+    var cls = order.map(function(k){ var q = an.cls[k]; return metric(names[k], pct(an.total ? q.vol / an.total * 100 : 0, 0) + " prometa", q.w + " denarnic · nakupi " + usd(q.buy) + " · prodaje " + usd(q.sell), ""); }).join("");
+    var hrs = trHours(c).map(function(b){
+      return '<tr><td>' + hhmm(b.h * 3600000) + '</td><td>' + b.n + '</td><td>' + esc(usd(b.v)) + '</td><td>' + pc0(b.normal, b.v) + '</td><td>' + pc0(b.whale, b.v) + '</td><td>' + pc0(b.bot, b.v) + '</td><td>' + netSpan(b.net) + '</td></tr>';
+    }).join("");
+    var top = an.wl.slice().sort(function(a, b){ return b.vol - a.vol; }).slice(0, 5).map(function(w){
+      return '<tr><td><a href="' + esc(walletLink(c.chain, c.addr, w.addr)) + '" target="_blank" rel="noopener">' + esc(shortA(w.addr)) + '</a></td><td>' + esc(cn[w.cls] + (w.reasons[0] ? " · " + w.reasons[0] : "")) + '</td><td>' + w.n + '</td><td>' + esc(usd(w.buy) + " / " + usd(w.sell)) + '</td></tr>';
+    }).join("");
+    var gp = c.gaps.filter(function(q){ return q[1] > an.t0; });
+    return '<details class="sg"><summary><div class="top"><span><b>' + esc(c.sym) + '</b> <span class="stat">' + esc(c.chain) + '</span></span><span class="stat">' + an.n + ' tr. · ' + esc(usd(an.total)) + '</span></div></summary><div class="sgbody">' +
+      '<div class="stack">' + seg + '</div><div class="cap">' + legend + ' · ' + esc(fdt(an.t0) + ' – ' + fdt(an.t1)) + (gp.length ? ' · <span class="thin">luknje: ' + esc(gp.map(function(q){ return hhmm(q[0]) + "–" + hhmm(q[1]); }).join(", ")) + '</span>' : '') + '</div>' + cls +
+      '<div class="cap" style="margin-top:8px"><b>Po urah</b></div><div style="overflow-x:auto"><table class="pairs motion"><thead><tr><th>Ura</th><th>Tr.</th><th>Promet</th><th>Norm.</th><th>Kiti</th><th>Boti</th><th>Neto</th></tr></thead><tbody>' + hrs + '</tbody></table></div>' +
+      '<div class="cap" style="margin-top:8px"><b>Največji trgovci</b></div><div style="overflow-x:auto"><table class="pairs"><thead><tr><th>Naslov</th><th>Razred</th><th>Tr.</th><th>Nak. / prod.</th></tr></thead><tbody>' + top + '</tbody></table></div></div></details>';
+  }).join("");
+  box.innerHTML = '<div class="card" style="overflow-x:auto"><table class="pairs motion"><thead><tr><th>Kovanec</th><th>Tr.</th><th>Promet</th><th>Norm.</th><th>Kiti</th><th>Boti</th><th>Neto</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="cap">Tapni kovanec za podrobnosti. Deleži so del prometa v izbranem oknu. Razvrstitev je ocena po pravilih, lovci na Alpha točke so pogosto videti kot boti.</div>' +
+    '<div class="card" style="padding:4px 10px;margin-top:8px">' + (det || '<div class="loading">V izbranem oknu ni dovolj trgovanj.</div>') + '</div>';
+}
+function tradersText(){
+  var s = "\n--- Promet po vrsti trgovcev (zbirka) ---\n", D = trCompute();
+  if (!D.length) return s + "ni zbranih trgovanj\n";
+  var sp = WSPAN.d, r = winRange("d");
+  s += "Okno: " + fdt(r.from > 0 ? Math.max(r.from, sp.t0) : sp.t0) + " – " + fdt(r.to === Infinity ? sp.t1 : Math.min(r.to, sp.t1)) + "\n";
+  s += "Kovanec | veriga | trg. | promet | normalni | kiti | boti | neto brez botov\n";
+  D.forEach(function(c){
+    if (!c.an) { s += [c.sym, c.chain, c.tw.length, "premalo v oknu"].join(" | ") + "\n"; return; }
+    var q = c.an.cls, t = c.an.total;
+    s += [c.sym, c.chain, c.an.n, usd(t), pc0(q.normal.vol, t), pc0(q.whale.vol, t), pc0(q.bot.vol, t), usdS(trNet(c))].join(" | ") + "\n";
+  });
+  D.forEach(function(c){
+    if (!c.an) return;
+    s += "\nUre " + c.sym + " (ura | trg. | promet | normalni | kiti | boti | neto brez botov):\n";
+    trHours(c).forEach(function(b){ s += [hhmm(b.h * 3600000), b.n, usd(b.v), pc0(b.normal, b.v), pc0(b.whale, b.v), pc0(b.bot, b.v), usdS(b.net)].join(" | ") + "\n"; });
+  });
+  return s;
+}
+$("dwinbox").innerHTML = winCtlHtml("d");
+$("dtrref").addEventListener("click", renderTraders);
+
 function showTab(t){
   document.body.setAttribute("data-t", t);
   Array.prototype.forEach.call(document.querySelectorAll("#tabbar button"), function(b){ b.classList.toggle("on", b.getAttribute("data-t") === t); });
   try { localStorage.setItem("ct_tab", t); } catch (e) {}
-  if (t === "log") renderTop6(false);
+  if (t === "log") { renderTop6(false); renderTraders(); }
   window.scrollTo(0, 0);
 }
 $("tabbar").addEventListener("click", function(e){ var b = e.target.closest("button"); if (b) showTab(b.getAttribute("data-t")); });
