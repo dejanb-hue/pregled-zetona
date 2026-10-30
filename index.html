@@ -3332,9 +3332,9 @@ function hourStat(b, sigs, h){
     if (e.p0 > 0 && e.p1 > 0) ch.push((e.p1 / e.p0 - 1) * 100);
     v += e.v || 0; o += e.o || 0;
   });
-  var spv = 0, spc = [];
-  Object.keys(b.sp || {}).forEach(function(k){ var q = b.sp[k]; spv += q.v || 0; if (q.p0 > 0 && q.p1 > 0) spc.push((q.p1 / q.p0 - 1) * 100); });
-  return {all: all, spv: spv, spm: spc.length ? median(spc) : null, h: h, u: u, lst: lst.sort(function(a, b){ return b.x - a.x; }), n: u.length, sg: sigs.filter(function(s){ return !isAl(s) && Math.floor(s.t / HMS) === h; }).length, al: sigs.filter(function(s){ return isAl(s) && Math.floor(s.t / HMS) === h; }).length,
+  var spv = 0, spc = [], sall = [];
+  Object.keys(b.sp || {}).forEach(function(k){ var q = b.sp[k]; sall.push({k: k, p0: q.p0, p1: q.p1, v: q.v || 0, c: (q.p0 > 0 && q.p1 > 0) ? (q.p1 / q.p0 - 1) * 100 : null}); spv += q.v || 0; if (q.p0 > 0 && q.p1 > 0) spc.push((q.p1 / q.p0 - 1) * 100); });
+  return {all: all, sall: sall, spv: spv, spm: spc.length ? median(spc) : null, h: h, u: u, lst: lst.sort(function(a, b){ return b.x - a.x; }), n: u.length, sg: sigs.filter(function(s){ return !isAl(s) && Math.floor(s.t / HMS) === h; }).length, al: sigs.filter(function(s){ return isAl(s) && Math.floor(s.t / HMS) === h; }).length,
     med: ch.length ? median(ch) : null, v: v, o: o, s: b.s, bf: !!b.b, gap: !b.b && b.s < 20 && h < Math.floor(Date.now() / HMS)};
 }
 function dayRows(L, sigs, day){
@@ -3343,15 +3343,21 @@ function dayRows(L, sigs, day){
 }
 function summarize(r){
   if (!r.length) return null;
-  var u = {}, meds = [], v = 0, sg = 0, al = 0, pc = {};
-  r.forEach(function(x){ x.lst.forEach(function(q){ if (!u[q.k] || q.x > u[q.k]) u[q.k] = q.x; }); (x.all || []).forEach(function(q){ var e = pc[q.k] || (pc[q.k] = {k: q.k, p1: q.p1, p0: q.p0, mx: -1e9, x: 0}); e.p0 = q.p0; if (q.c != null && q.c > e.mx) e.mx = q.c; if (q.x > e.x) e.x = q.x; });
+  var u = {}, meds = [], v = 0, sg = 0, al = 0, pc = {}, ps = {};
+  r.forEach(function(x){ x.lst.forEach(function(q){ if (!u[q.k] || q.x > u[q.k]) u[q.k] = q.x; }); (x.sall || []).forEach(function(q){ var e = ps[q.k] || (ps[q.k] = {k: q.k, p1: q.p1, p0: q.p0, mx: -1e9, v: 0}); e.p0 = q.p0; if (q.c != null && q.c > e.mx) e.mx = q.c; e.v += q.v || 0; });
+    (x.all || []).forEach(function(q){ var e = pc[q.k] || (pc[q.k] = {k: q.k, p1: q.p1, p0: q.p0, mx: -1e9, x: 0}); e.p0 = q.p0; if (q.c != null && q.c > e.mx) e.mx = q.c; if (q.x > e.x) e.x = q.x; });
     if (x.med != null) meds.push(x.med); v += x.v; sg += x.sg; al += x.al || 0; });
   var pl = Object.keys(pc).map(function(k){ return pc[k]; }).filter(function(e){ return e.p0 > 0 && e.p1 > 0; });
   pl.forEach(function(e){ e.d = (e.p1 / e.p0 - 1) * 100; });
   var fm = function(e){ return e.k.replace(/USDT$/, "") + " " + sgn(e.d) + " (max 1 h " + sgn(e.mx) + ", vol " + fr(e.x) + "x)"; };
   var up = pl.filter(function(e){ return e.d > 0; }).sort(function(a, b){ return b.d - a.d; }).slice(0, 10).map(fm);
   var dn = pl.filter(function(e){ return e.d < 0; }).sort(function(a, b){ return a.d - b.d; }).slice(0, 5).map(fm);
-  return {up: up, dn: dn, n: Object.keys(u).length, sg: sg, al: al, med: meds.length ? median(meds) : null, v: v, o: r[0].o, hrs: r.length,
+  var sl = Object.keys(ps).map(function(k){ return ps[k]; }).filter(function(e){ return e.p0 > 0 && e.p1 > 0; });
+  sl.forEach(function(e){ e.d = (e.p1 / e.p0 - 1) * 100; });
+  var fs = function(e){ return e.k + " " + sgn(e.d) + " (max 1 h " + sgn(e.mx) + ", promet " + usd(e.v) + ")"; };
+  var sup = sl.filter(function(e){ return e.d > 0; }).sort(function(a, b){ return b.d - a.d; }).slice(0, 10).map(fs);
+  var sdn = sl.filter(function(e){ return e.d < 0; }).sort(function(a, b){ return a.d - b.d; }).slice(0, 5).map(fs);
+  return {sup: sup, sdn: sdn, up: up, dn: dn, n: Object.keys(u).length, sg: sg, al: al, med: meds.length ? median(meds) : null, v: v, o: r[0].o, hrs: r.length,
     coins: Object.keys(u).sort(function(a, b){ return u[b] - u[a]; }).slice(0, 12).map(function(k){ return k + " " + fr(u[k]) + "x"; }),
     gaps: r.filter(function(x){ return x.gap; }).length,
     top: r.slice().sort(function(a, b){ return b.v - a.v; }).slice(0, 3).map(function(x){ return hhmm(x.h * HMS); })};
@@ -3378,6 +3384,8 @@ function renderLog(){
     metric("OI (zadnja ura)", usd(x.o), "", "") +
     metric("Kovanci dneva: največja rast cene", x.up ? String(x.up.length) : "–", (x.up || x.coins || []).join(" · ") || "–", "green") +
     (x.dn ? metric("Najbolj negativni", String(x.dn.length), x.dn.join(" · ") || "–", "red") : "") +
+    (x.sup && x.sup.length ? metric("Spot: največja rast cene", String(x.sup.length), x.sup.join(" · "), "green") : "") +
+    (x.sdn && x.sdn.length ? metric("Spot: najbolj negativni", String(x.sdn.length), x.sdn.join(" · "), "red") : "") +
     metric("Največja rast volumna", String(x.n), (x.coins || []).join(", ") || "–", "") +
     metric("Vrhnje ure po prometu", (x.top || []).join(", ") || "–", x.hrs + " ur v zapisu" + (x.gaps ? ", lukenj: " + x.gaps : "") + ".", x.gaps ? "amber" : "");
   if (!rows.length) { box.innerHTML = '<div class="loading">Urni zapisi tega dne so že izbrisani (hranijo se 7 dni), ostal je povzetek.</div>'; return; }
