@@ -1677,6 +1677,7 @@ async function fixMissBg(){
   fixBusy = false;
 }
 function futOk(r){ return r.vol >= settings.min24 || !!r.jump; }
+function futE(r, info, ticks){ var e = matchFut(r, info, ticks); if (!e) return null; if (futOk(r)) return e; var t = ticks[e.symbol]; return (t && t.qv >= 5e7) ? e : null; }
 function liveOk(r){ return (r.vol >= settings.min24 && r.v1 >= settings.min1h) || !!r.jump; }
 function visibleRows(){
   return gRows.filter(function(r){ return r.liq >= settings.minLiq && liveOk(r); });
@@ -2035,7 +2036,7 @@ async function buySignals(){
 function alphaFutList(info, ticks){
   var seen = {}, out = [];
   gRows.forEach(function(r){
-    var e = futOk(r) ? matchFut(r, info, ticks) : null;
+    var e = futE(r, info, ticks);
     if (e && !seen[e.symbol]) { seen[e.symbol] = 1; out.push({sym: e.symbol, label: r.sym, addr: r.addr, qv: (ticks[e.symbol] && ticks[e.symbol].qv) || 0}); }
   });
   return out.sort(function(a, b){ return b.qv - a.qv; });
@@ -2212,7 +2213,9 @@ function logSignals(cands, ticks, prem){
   if (added.length) saveSigs(sigs);
   return added;
 }
-async function resolveSigs(){
+var resBusy = false;
+async function resolveSigs(){ if (resBusy) return; resBusy = true; try { await resolveSigsRun(); } finally { resBusy = false; } }
+async function resolveSigsRun(){
   var sigs = loadSigs(), now = Date.now(), jobs = [];
   sigs.forEach(function(s){
     HORIZ.forEach(function(h){
@@ -2220,7 +2223,8 @@ async function resolveSigs(){
       if (s.o && s.o[h.k] == null && now >= s.t + h.m * 60000 + 90000) jobs.push({s: s, h: h});
     });
   });
-  jobs = jobs.slice(0, 8);
+  var gtj = jobs.filter(function(j){ return j.s.src === "gt"; }).slice(0, 8), ftj = jobs.filter(function(j){ return j.s.src !== "gt"; }).slice(0, 40);
+  jobs = ftj.concat(gtj);
   if (!jobs.length) return;
   await pool(jobs, 4, async function(job){
     var at = job.s.t + job.h.m * 60000;
@@ -2235,7 +2239,10 @@ async function resolveSigs(){
       if (o) job.s.o[job.h.k] = pchg(o, job.s.p0);
     } else job.s.o[job.h.k] = "x";
   });
-  saveSigs(sigs);
+  var fresh = loadSigs(), byId = {};
+  sigs.forEach(function(q){ byId[q.id] = q; });
+  fresh.forEach(function(f){ var m = byId[f.id]; if (!m || !m.o) return; if (!f.o) f.o = {}; HORIZ.forEach(function(h){ if (f.o[h.k] == null && m.o[h.k] != null) f.o[h.k] = m.o[h.k]; }); });
+  saveSigs(fresh);
 }
 function announceSignals(list){
   if (!list.length || !$("auto").checked) return;
@@ -2268,7 +2275,7 @@ function jumpCalc(o, v1){
     var prevV = hist.slice(0, -1).map(function(x){ return x[1]; }).filter(function(v){ return v > 0; });
     if (prevV.length >= 3 && prevV.length >= (hist.length - 1) * 0.8) {
       base = Math.min.apply(null, prevV);
-      if (v1 >= 50000 && v1 >= 3 * Math.max(base, 10000)) { at = now; nw = true; }
+      if (base >= 5000 && v1 >= 50000 && v1 >= 3 * base) { at = now; nw = true; }
     }
   }
   return {vh: hist, at: at, on: !!at && now - at < 1800000, nw: nw, base: base};
@@ -2277,7 +2284,7 @@ function checkJumps(rows){
   if (!$("auto").checked) return;
   var hits = rows.filter(function(r){ return r.jumpNew && r.liq >= settings.minLiq; }).sort(function(a, b){ return b.v1 - a.v1; });
   if (!hits.length) return;
-  hits.slice(0, 5).forEach(function(r){
+  hits.forEach(function(r){
     logAlert("a_jump", "1h", {label: r.sym, sym: r.sym, addr: r.addr}, r.price, "⚡ skok prometa 1 h: " + usd(r.v1) + " (prej " + usd(r.jbase) + ")", r);
   });
   renderAlerts();
@@ -2336,13 +2343,14 @@ function cellAvg(arr){
   if (!arr.length) return "…";
   var avg = arr.reduce(function(a, b){ return a + b; }, 0) / arr.length;
   var win = arr.filter(function(v){ return v > 0; }).length / arr.length * 100;
-  return '<span class="' + (avg < 0 ? "down" : "up") + '">' + esc(sgn(avg)) + '</span><br><span class="stat">' + Math.round(win) + ' % poz.<br>(od ' + arr.length + ')</span>';
+  return '<span class="' + (avg < 0 ? "down" : "up") + '">' + esc(sgn(avg)) + '</span><br><span class="stat">' + Math.round(win) + ' % poz.<br>med. ' + esc(sgn(median(arr))) + '<br>(od ' + arr.length + ')</span>';
 }
 function grpHtml(arr, word){
   var groups = {};
   arr.forEach(function(s){
-    var key = s.per + "|" + s.st;
-    var g = groups[key] || (groups[key] = {per: s.per, st: s.st, n: 0, list: [], r: {}});
+    var dm = (s.st === "a_px15" || s.st === "a_px1h") ? String(s.msg || "").match(/cena\s*([+-])/) : null, dir = dm ? dm[1] : "";
+    var key = s.per + "|" + s.st + "|" + dir;
+    var g = groups[key] || (groups[key] = {per: s.per, st: s.st, dir: dir, n: 0, list: [], r: {}});
     HORIZ.forEach(function(h){ if (!g.r[h.k]) g.r[h.k] = []; var v = s.o && s.o[h.k]; if (typeof v === "number" && isFinite(v)) g.r[h.k].push(v); });
     g.n++; g.list.push(s);
   });
@@ -2350,7 +2358,7 @@ function grpHtml(arr, word){
   if (!keys.length) return '<div class="loading">Še ni zapisov.</div>';
   return keys.map(function(k){
     var g = groups[k];
-    return '<details class="sg"><summary><div class="top"><span><b>' + esc(TFL[g.per] + " · " + (STATE_NAMES[g.st] || g.st)) + '</b></span><span class="stat">' + (word ? g.n + " dogodkov" : sigWord(g.n)) + '</span></div>' +
+    return '<details class="sg"><summary><div class="top"><span><b>' + esc(TFL[g.per] + " · " + (STATE_NAMES[g.st] || g.st) + (g.dir === "-" ? " · padec" : g.dir === "+" ? " · rast" : "")) + '</b></span><span class="stat">' + (word ? g.n + " dogodkov" : sigWord(g.n)) + '</span></div>' +
       '<div class="sgcells">' + HORIZ.map(function(h){ return '<div><span class="stat">po ' + OUTL[h.k] + '</span><br>' + cellAvg(g.r[h.k]) + '</div>'; }).join("") + '</div></summary>' +
       '<div class="sgbody">' + g.list.slice().reverse().map(function(s){ return sigDetail(s, false); }).join("") + '</div></details>';
   }).join("");
@@ -2399,14 +2407,14 @@ async function scanFut(){
     if (futScope === "alpha") {
       if (!gRows.length) await scanAlpha();
       gRows.forEach(function(r){
-        var e = futOk(r) ? matchFut(r, info, ticks) : null;
+        var e = futE(r, info, ticks);
         if (e && !seen[e.symbol]) {
           seen[e.symbol] = 1;
           cands.push({sym: e.symbol, label: r.sym, addr: r.addr, qv: (ticks[e.symbol] && ticks[e.symbol].qv) || 0});
         }
       });
       cands.sort(function(a, b){ return b.qv - a.qv; });
-      cands = cands.slice(0, 40);
+      cands = cands.slice(0, 60);
     } else {
       var arr = info.all.map(function(e){
         var t = ticks[e.symbol] || {};
@@ -2480,7 +2488,7 @@ async function showScanList(){
       }
     });
     arr.sort(function(a, b){ return b.qv - a.qv; });
-    var LIM = 40, n = Math.min(arr.length, LIM);
+    var LIM = 60, n = Math.min(arr.length, LIM);
     var head = '<div class="cap" style="padding:8px 4px">Alpha žetonov z DEXScreener podatki: ' + gRows.length +
       ' · s futures parom: ' + arr.length + ' · pregledanih (top ' + LIM + ' po futures prometu 24 h): ' + n + '.</div>';
     var rows = arr.map(function(c, i){
@@ -2559,7 +2567,7 @@ function checkFutAlerts(cands){
   });
   if (!hits.length) return;
   hits.sort(function(a, b){ return Math.abs(b.oi.c5) - Math.abs(a.oi.c5); });
-  hits.slice(0, 5).forEach(function(c){
+  hits.forEach(function(c){
     logAlert("a_oi", "5m", {label: c.label, sym: c.sym, addr: c.addr}, c.kl && c.kl.last, "OI " + sgn(c.oi.c5) + " v 5 min (futures, količina)");
   });
   alertLog = alertLog.slice(0, 10);
@@ -2581,7 +2589,7 @@ function checkPxAlerts(cands){
   });
   if (!hits.length) return;
   hits.sort(function(a, b){ return Math.abs(b.p) - Math.abs(a.p); });
-  hits.slice(0, 5).forEach(function(h){
+  hits.forEach(function(h){
     var w = h.c.kl.vol["15m"];
     logAlert(h.kind, h.kind === "a_px15" ? "15m" : "1h", {label: h.c.label, sym: h.c.sym, addr: h.c.addr}, h.c.kl.last, "futures cena " + sgn(h.p) + (h.kind === "a_px15" ? " v 15 min" : " v 1 h") + (w && w.x != null ? " · vol " + fr(w.x) + "x" : ""));
   });
@@ -2600,7 +2608,7 @@ function checkTakerAlerts(list){
   });
   if (!hits.length) return;
   hits.sort(function(a, b){ return b.sp.x - a.sp.x; });
-  hits.slice(0, 5).forEach(function(h){
+  hits.forEach(function(h){
     logAlert("a_tk", "5m", {label: h.c.label, sym: h.c.sym, addr: h.c.addr}, h.c.kl && h.c.kl.last, "taker promet " + fr(h.sp.x) + "x povprečja, nakupi/prodaje " + fr(h.sp.ratio));
   });
   alertLog = alertLog.slice(0, 10);
@@ -2720,7 +2728,7 @@ function checkAlerts(){
   var hits = visibleRows().filter(function(r){
     return !r.miss && r.m5 != null && r.m5 >= settings.thr &&
       (!alerted[r.addr.toLowerCase()] || now - alerted[r.addr.toLowerCase()] > 900000);
-  }).sort(function(a, b){ return b.m5 - a.m5; }).slice(0, 5);
+  }).sort(function(a, b){ return b.m5 - a.m5; });
   if (!hits.length) return;
   hits.forEach(function(r){
     alerted[r.addr.toLowerCase()] = now;
@@ -2765,9 +2773,10 @@ function setAuto(on){
 
 document.addEventListener("visibilitychange", function(){
   if (document.visibilityState !== "visible") { hiddenAt = Date.now(); return; }
-  if (hiddenAt && Date.now() - hiddenAt > 120000) { hLog.push({k: "stran uspana", sym: "–", msg: "Stran je bila v ozadju, skeni so stali.", t0: hiddenAt, t1: Date.now(), n: 1, heal: 0}); hSave(); renderHealth(); catchUp(hiddenAt); }
+  if (hiddenAt && Date.now() - hiddenAt > 120000) { hLog.push({k: "stran uspana", sym: "–", msg: "Stran je bila v ozadju, skeni so stali.", t0: hiddenAt, t1: Date.now(), n: 1, heal: 0}); hSave(); renderHealth(); alertLog.unshift({sym: "Luknja", rest: "stran je bila v ozadju " + durTxt(Date.now() - hiddenAt) + ", posnetkov v tem času ni", time: new Date().toLocaleTimeString("sl-SI")}); renderAlerts(); catchUp(hiddenAt); }
   hiddenAt = 0;
   if ($("auto").checked) { setWake(true); scanAlpha(); scanFut(); }
+  resolveSigs().then(function(){ renderSigs(); }, function(){});
   if (settings.autoFill) setTimeout(fillGaps, 4000);
 });
 document.addEventListener("click", function(e){
@@ -3295,7 +3304,7 @@ function saveLog(L){
 function dedupSigs(a){
   var out = [];
   a.slice().sort(function(x, y){ return (x.t - y.t) || (x.per === y.per ? 0 : x.per === "15m" ? -1 : 1); }).forEach(function(s){
-    if (out.some(function(o){ return o.sym === s.sym && o.st === s.st && o.src === s.src && Math.abs(o.t - s.t) < 600000; })) return;
+    if (out.some(function(o){ return o.sym === s.sym && o.st === s.st && o.src === s.src && Math.abs(o.t - s.t) < (isAl(s) ? 1800000 : 600000); })) return;
     out.push(s);
   });
   return out;
@@ -3315,16 +3324,17 @@ function logScan(cands, ticks){
   saveLog(L);
 }
 function hourStat(b, sigs, h){
-  var u = [], lst = [], ch = [], v = 0, o = 0;
+  var u = [], lst = [], ch = [], all = [], v = 0, o = 0;
   Object.keys(b.c).forEach(function(k){
     var e = b.c[k];
     if (e.x >= settings.volX) { u.push(k); lst.push({k: k.replace(/USDT$/, ""), x: e.x, c: (e.p0 > 0 && e.p1 > 0) ? (e.p1 / e.p0 - 1) * 100 : null}); }
+    all.push({k: k, p0: e.p0, p1: e.p1, x: e.x || 0, c: (e.p0 > 0 && e.p1 > 0) ? (e.p1 / e.p0 - 1) * 100 : null});
     if (e.p0 > 0 && e.p1 > 0) ch.push((e.p1 / e.p0 - 1) * 100);
     v += e.v || 0; o += e.o || 0;
   });
   var spv = 0, spc = [];
   Object.keys(b.sp || {}).forEach(function(k){ var q = b.sp[k]; spv += q.v || 0; if (q.p0 > 0 && q.p1 > 0) spc.push((q.p1 / q.p0 - 1) * 100); });
-  return {spv: spv, spm: spc.length ? median(spc) : null, h: h, u: u, lst: lst.sort(function(a, b){ return b.x - a.x; }), n: u.length, sg: sigs.filter(function(s){ return !isAl(s) && Math.floor(s.t / HMS) === h; }).length, al: sigs.filter(function(s){ return isAl(s) && Math.floor(s.t / HMS) === h; }).length,
+  return {all: all, spv: spv, spm: spc.length ? median(spc) : null, h: h, u: u, lst: lst.sort(function(a, b){ return b.x - a.x; }), n: u.length, sg: sigs.filter(function(s){ return !isAl(s) && Math.floor(s.t / HMS) === h; }).length, al: sigs.filter(function(s){ return isAl(s) && Math.floor(s.t / HMS) === h; }).length,
     med: ch.length ? median(ch) : null, v: v, o: o, s: b.s, bf: !!b.b, gap: !b.b && b.s < 20 && h < Math.floor(Date.now() / HMS)};
 }
 function dayRows(L, sigs, day){
@@ -3333,9 +3343,15 @@ function dayRows(L, sigs, day){
 }
 function summarize(r){
   if (!r.length) return null;
-  var u = {}, meds = [], v = 0, sg = 0, al = 0;
-  r.forEach(function(x){ x.lst.forEach(function(q){ if (!u[q.k] || q.x > u[q.k]) u[q.k] = q.x; }); if (x.med != null) meds.push(x.med); v += x.v; sg += x.sg; al += x.al || 0; });
-  return {n: Object.keys(u).length, sg: sg, al: al, med: meds.length ? median(meds) : null, v: v, o: r[0].o, hrs: r.length,
+  var u = {}, meds = [], v = 0, sg = 0, al = 0, pc = {};
+  r.forEach(function(x){ x.lst.forEach(function(q){ if (!u[q.k] || q.x > u[q.k]) u[q.k] = q.x; }); (x.all || []).forEach(function(q){ var e = pc[q.k] || (pc[q.k] = {k: q.k, p1: q.p1, p0: q.p0, mx: -1e9, x: 0}); e.p0 = q.p0; if (q.c != null && q.c > e.mx) e.mx = q.c; if (q.x > e.x) e.x = q.x; });
+    if (x.med != null) meds.push(x.med); v += x.v; sg += x.sg; al += x.al || 0; });
+  var pl = Object.keys(pc).map(function(k){ return pc[k]; }).filter(function(e){ return e.p0 > 0 && e.p1 > 0; });
+  pl.forEach(function(e){ e.d = (e.p1 / e.p0 - 1) * 100; });
+  var fm = function(e){ return e.k.replace(/USDT$/, "") + " " + sgn(e.d) + " (max 1 h " + sgn(e.mx) + ", vol " + fr(e.x) + "x)"; };
+  var up = pl.filter(function(e){ return e.d > 0; }).sort(function(a, b){ return b.d - a.d; }).slice(0, 10).map(fm);
+  var dn = pl.filter(function(e){ return e.d < 0; }).sort(function(a, b){ return a.d - b.d; }).slice(0, 5).map(fm);
+  return {up: up, dn: dn, n: Object.keys(u).length, sg: sg, al: al, med: meds.length ? median(meds) : null, v: v, o: r[0].o, hrs: r.length,
     coins: Object.keys(u).sort(function(a, b){ return u[b] - u[a]; }).slice(0, 12).map(function(k){ return k + " " + fr(u[k]) + "x"; }),
     gaps: r.filter(function(x){ return x.gap; }).length,
     top: r.slice().sort(function(a, b){ return b.v - a.v; }).slice(0, 3).map(function(x){ return hhmm(x.h * HMS); })};
@@ -3360,7 +3376,9 @@ function renderLog(){
     metric("Mediana urne spremembe cene", sgn(x.med), "Mediana urnih median čez kovance.", "") +
     metric("Skupen futures promet", usd(x.v), "Seštevek urnih prometov pregledanih kovancev.", "") +
     metric("OI (zadnja ura)", usd(x.o), "", "") +
-    metric("Kovanci dneva", String(x.n), (x.coins || []).join(", ") || "–", "") +
+    metric("Kovanci dneva: največja rast cene", x.up ? String(x.up.length) : "–", (x.up || x.coins || []).join(" · ") || "–", "green") +
+    (x.dn ? metric("Najbolj negativni", String(x.dn.length), x.dn.join(" · ") || "–", "red") : "") +
+    metric("Največja rast volumna", String(x.n), (x.coins || []).join(", ") || "–", "") +
     metric("Vrhnje ure po prometu", (x.top || []).join(", ") || "–", x.hrs + " ur v zapisu" + (x.gaps ? ", lukenj: " + x.gaps : "") + ".", x.gaps ? "amber" : "");
   if (!rows.length) { box.innerHTML = '<div class="loading">Urni zapisi tega dne so že izbrisani (hranijo se 7 dni), ostal je povzetek.</div>'; return; }
   box.innerHTML = '<table class="pairs motion"><thead><tr><th>Ura</th><th>Kov.</th><th>Sig.</th><th>Opoz.</th><th>Cena</th><th>Promet</th><th>OI</th><th>Spot</th><th>Spot prom.</th><th>Skeni</th></tr></thead><tbody>' +
@@ -3797,6 +3815,7 @@ try { if (!localStorage.getItem("ct_mig2")) { localStorage.removeItem(LOG_KEY); 
 $("auto").checked = settings.auto; $("autofill").checked = settings.autoFill; renderLog(); renderLeaders(); renderHealth();
 $("hlclear").addEventListener("click", function(){ hLog = []; hSave(); renderHealth(); });
 scanAlpha().then(scanFut).then(function(){ if (settings.autoFill) fillGaps(); });
+setInterval(function(){ if (document.visibilityState === "visible") resolveSigs().then(function(){ renderSigs(); }, function(){}); }, 45000);
 if (settings.auto) setAuto(true);
 
 try {
