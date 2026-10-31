@@ -181,11 +181,11 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
         <option value="100000">$100K</option>
       </select>
     </label>
-    <label><span>Voditelji: najmanjši futures promet 6 h</span><span><input type="number" id="leadvol" min="0.1" step="0.5" inputmode="decimal"> M$</span></label>
-    <label><span>Opozori, ko futures cena v 15 min preseže (±)</span><span><input type="number" id="px15" min="1" step="1" inputmode="decimal"> %</span></label>
-    <label><span>Opozori, ko futures cena v 1 h preseže (±)</span><span><input type="number" id="px1h" min="1" step="1" inputmode="decimal"> %</span></label>
-    <label><span>Push na telefon: ntfy.sh tema (neobvezno)</span><input type="text" id="ntfy" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:150px;flex:none;padding:8px;font-size:14px"></label>
-    <label><span>Ob odprtju zapolni luknje v dnevniku (24 h)</span><input type="checkbox" id="autofill"></label>
+    <label><span>Voditelji: najmanjši futures promet 6 h<span class="info" role="button" tabindex="0" data-info="set_lead" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="leadvol" min="0.1" step="0.5" inputmode="decimal"> M$</span></label>
+    <label><span>Opozori, ko futures cena v 15 min preseže (±)<span class="info" role="button" tabindex="0" data-info="set_px15" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="px15" min="1" step="1" inputmode="decimal"> %</span></label>
+    <label><span>Opozori, ko futures cena v 1 h preseže (±)<span class="info" role="button" tabindex="0" data-info="set_px1h" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="px1h" min="1" step="1" inputmode="decimal"> %</span></label>
+    <label><span>Push na telefon: ntfy.sh tema (neobvezno)<span class="info" role="button" tabindex="0" data-info="set_ntfy" aria-label="Razlaga">ⓘ</span></span><input type="text" id="ntfy" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:150px;flex:none;padding:8px;font-size:14px"></label>
+    <label><span>Ob odprtju zapolni luknje v dnevniku (24 h)<span class="info" role="button" tabindex="0" data-info="set_fill" aria-label="Razlaga">ⓘ</span></span><input type="checkbox" id="autofill"></label>
     <label><span>Samodejno osveževanje (30 s) in opozorila<span class="info" role="button" tabindex="0" data-info="set_auto" aria-label="Razlaga">ⓘ</span></span><input type="checkbox" id="auto"></label>
     <div class="row" style="align-items:center;justify-content:space-between">
       <button class="ghost small" id="grefresh">Osveži seznam</button>
@@ -218,6 +218,7 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
     <div class="stat" id="iomsg" style="margin-top:6px"></div>
   </div>
   <p class="stat">Signal se zabeleži, ko kovanec v 15-min ali 1-urnem oknu izpolni oba pogoja (rast volumna in sprememba OI), največ enkrat na uro. Izid je sprememba futures cene po 15 min, 1 h in 3 h. Brez provizij in zdrsa, vzorec je majhen, zato ni dokaz.</p>
+  <p class="stat"><b>Kratice:</b> sq squeeze · nl nove pozicije · ns novi shorti · lq likvidacije · bp nakupni pritisk · ⚑5m cena 5 min (spot) · ⚑OI skok OI · ⚑tk skok takerja · ⚑15m futures cena 15 min · ⚑1h futures cena 1 h · ⚡ skok prometa <span class="info" role="button" tabindex="0" data-info="abbr" aria-label="Razlaga">ⓘ</span></p>
 
   <h2>Trend zadnja ura<span class="info" role="button" tabindex="0" data-info="sec_trend" aria-label="Razlaga">ⓘ</span></h2>
   <p class="note">Vsak stolpec je 15-min obdobje do ure v glavi. Podatki so iz posnetkov, ki se shranijo v tej napravi ob osveževanju futures panela (največ enkrat na 5 min na kovanec).</p>
@@ -231,19 +232,19 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="stat" id="lgmsg" style="margin:6px 0"></div>
   <div class="card" id="lgsum"></div>
   <div class="card" id="lgtab" style="overflow-x:auto;margin-top:8px"></div>
-  <h2>Voditelji · 6 h</h2>
+  <h2>Voditelji · 6 h<span class="info" role="button" tabindex="0" data-info="sec_lead" aria-label="Razlaga">ⓘ</span></h2>
   <p class="note">Futures kovanci Alpha seznama, razvrščeni po 6 h ceni, prometu in OI, nad absolutnim pragom prometa (nastavitve).</p>
   <div class="card" id="lgleaders" style="overflow-x:auto"><div class="loading">Čakam na sken…</div></div>
-  <h2>Top kovanci · zadnjih 6 ur</h2>
+  <h2>Top kovanci · zadnjih 6 ur<span class="info" role="button" tabindex="0" data-info="sec_top6" aria-label="Razlaga">ⓘ</span></h2>
   <p class="note">Do 5 futures kovancev z najvišjo rastjo volumna v zadnjih 6 h in do 3 Alpha kovanci brez futures (po rasti v 1 h). Vsak ima tabelo po 30 min kot v Pregledu žetona. Oranžna številka = ekstrem (promet nad 2x mediane, cena nad 3 %, OI nad pragom, taker nad 1,5 ali pod 0,67).</p>
   <div class="row" style="align-items:center;justify-content:space-between"><button class="ghost small" id="lgtop">Osveži top 6 h</button><span class="stat" id="lgtopmsg"></span></div>
   <div id="lgtopbox"></div>
-  <h2>Promet po vrsti trgovcev · zbirka</h2>
+  <h2>Promet po vrsti trgovcev · zbirka<span class="info" role="button" tabindex="0" data-info="sec_dflow" aria-label="Razlaga">ⓘ</span></h2>
   <p class="note">Kovanci, za katere si v zavihku Žeton zbiral trgovanja (največ 4, zadnjih 24 h). Zbira se, dokler je zavihek Žeton odprt. Razvrstitev je ocena po pravilih. Trak izbere časovno okno za vse kovance.</p>
   <div id="dwinbox"></div>
   <div class="row" style="align-items:center;justify-content:space-between;margin:8px 0"><button class="ghost small" id="dtrref">Osveži</button><span class="stat">Neto = nakupi minus prodaje brez botov</span></div>
   <div id="dtrbox"></div>
-  <h2>Zdravje podatkov</h2>
+  <h2>Zdravje podatkov<span class="info" role="button" tabindex="0" data-info="sec_health" aria-label="Razlaga">ⓘ</span></h2>
   <p class="note">Kontrolni seznam: ali so viri in kovanci popolni. Težave se beležijo, stran jih skuša sama rešiti (ponovni poskus, drug vir).</p>
   <div class="card" id="hlcheck"></div>
   <div class="card" id="hllog" style="overflow-x:auto;margin-top:8px"></div>
@@ -268,12 +269,12 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="row" style="margin-top:12px;flex-wrap:wrap"><button class="ghost small" id="cpcoin">Kopiraj: podatki žetona</button><button class="ghost small" id="cpother">Kopiraj: ostali podatki</button></div>
   <div class="stat" id="cpmsg" style="margin-top:6px"></div>
 
-  <h2 id="wlh" hidden>Moj seznam</h2>
+  <h2 id="wlh" hidden>Moj seznam<span class="info" role="button" tabindex="0" data-info="sec_watch" aria-label="Razlaga">ⓘ</span></h2>
   <div id="watch" class="watch"></div>
 
   </div>
   <div data-tab="ana">
-  <h2>Analiza podatkov</h2>
+  <h2>Analiza podatkov<span class="info" role="button" tabindex="0" data-info="sec_ana" aria-label="Razlaga">ⓘ</span></h2>
   <p class="note">Prilepi besedilo iz gumba »Kopiraj: ostali podatki« (zavihek Žeton) in tapni Analiziraj. Izračun poteka v tej napravi.</p>
   <textarea id="anain" rows="5" spellcheck="false" autocapitalize="off" style="width:100%;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:8px;font:12px/1.4 monospace"></textarea>
   <div class="row" style="margin-top:8px"><button class="small" id="anapaste">Prilepi</button><button class="small" id="anago">Analiziraj</button><button class="ghost small" id="anaclr">Počisti</button></div>
@@ -342,13 +343,14 @@ function esc(s){
   });
 }
 /* ---------- razlage (gumb ⓘ) ---------- */
+var ABBR = "sq squeeze · nl nove pozicije · ns novi shorti · lq likvidacije · bp nakupni pritisk · ⚑5m cena 5 min (spot) · ⚑OI skok OI · ⚑tk skok takerja · ⚑15m futures cena 15 min · ⚑1h futures cena 1 h · ⚡ skok prometa";
 var INFO = {
-  sec_gainers: ["Največji rastoči · Binance Alpha", "Seznam Alpha žetonov z Binance, cene in spremembe z DEXScreenerja. Razvrščeno po spremembi cene v izbranem obdobju.\nSprememba cene je z glavnega para (največ likvidnosti), likvidnost in promet 24 h sta seštevek vseh parov žetona.\n15 min Binance ne ponuja, zato ga izračunam iz minutnih svečk Binance Alpha, in to samo za do 24 kandidatov z najvišjo rastjo v 5 min in 1 uri. Žeton izven teh kandidatov se v 15-min seznamu ne more pojaviti.\nOranžna likvidnost = pod $50K, izstop je težak. Vrstica »Futures« pod žetonom pokaže, ali ima kovanec futures par in kaj se tam dogaja."],
+  sec_gainers: ["Največji rastoči · Binance Alpha", "Seznam Alpha žetonov z Binance, cene in spremembe z DEXScreenerja. Razvrščeno po spremembi cene v izbranem obdobju.\nSprememba cene je z glavnega para (največ likvidnosti), likvidnost in promet 24 h sta seštevek vseh parov žetona.\n15 min Binance ne ponuja, zato ga izračunam iz minutnih svečk Binance Alpha, in to samo za do 24 kandidatov z najvišjo rastjo v 5 min in 1 uri. Žeton izven teh kandidatov se v 15-min seznamu ne more pojaviti.\nOranžna likvidnost = pod $50K, izstop je težak. Odstotki: 5 min in 1 h sta priceChange glavnega para z DEXScreenerja. 15 min je izračun iz Binance Alpha minutnih svečk (zaprtje zadnje proti odprtju pred 15 min, drseče okno). Seznam vključuje samo žetone, ki so skozi filter: promet 24 h ≥ $2M in 1 h ≥ $100K (ali skok prometa) ter najmanjša likvidnost iz nastavitev.\nVrstica »Futures« pod žetonom pokaže, ali ima kovanec futures par in kaj se tam dogaja."],
   sec_settings: ["Nastavitve in opozorila", "Nastavitve se shranijo v brskalnik te naprave. Opozorila (rast cene, skok OI, taker promet, novi signali) delujejo samo ob vklopljenem samodejnem osveževanju in odprti strani. Zvok in vibracija se sprožita ob vsakem opozorilu, isti kovanec se ne javi znova 15 minut."],
-  sec_futures: ["Futures · Binance", "Javni podatki Binance Futures. Pregleda do 40 kovancev: pri »Alpha z futures« tiste Alpha žetone, ki imajo futures par (povezava po simbolu in ceni, 1000PEPE velja za PEPE), pri »Vsi futures« 30 največjih po prometu in 15 največjih gibalcev.\nZa izbrano obdobje (15 min, 1 ura, 3 ure) izračuna rast futures prometa, spremembo OI v količini in spremembo cene iz svečk.\nPrikaže do 10 kovancev, ki izpolnjujejo pogoje iz nastavitev, razvrščenih po rasti volumna. Ni napoved cene."],
+  sec_futures: ["Futures · Binance", "Javni podatki Binance Futures. Pregleda do 40 kovancev: pri »Alpha z futures« tiste Alpha žetone, ki imajo futures par (povezava po simbolu in ceni, 1000PEPE velja za PEPE), pri »Vsi futures« 30 največjih po prometu in 15 največjih gibalcev.\nZa izbrano obdobje (15 min, 1 ura, 3 ure) izračuna rast futures prometa, spremembo OI v količini in spremembo cene iz svečk.\nOdstotki: cena = zadnja cena proti zaprtju 5-min svečke 3 (15 min), 12 (1 ura) ali 36 (3 ure) svečk nazaj, zato je okno 15 do 20 min (tekoča svečka je vključena). OI = sprememba količine pogodb. Rast volumna = promet zadnjega okna proti enako dolgemu prejšnjemu. Kovanci s futures prometom 24 h nad $50M so vključeni tudi pri majhnem spot prometu.\nPrikaže do 10 kovancev, ki izpolnjujejo pogoje iz nastavitev, razvrščenih po rasti volumna. Ni napoved cene."],
   sec_signals: ["Beleženje signalov", "Signal = kovanec je v 15-min ali 1-urnem oknu hkrati presegel prag rasti volumna in spremembe OI (nastavitve) in ima jasno stanje (ne »brez signala«). Največ en signal na kovanec in okno na uro.\nIzid = sprememba futures cene od trenutka signala po 15 min, 1 h in 3 h, brez provizij in zdrsa. Izidi se dopolnijo tudi, ko je bila stran zaprta.\nTapni skupino ali signal za podrobnosti (kovanec, cena, OI, volumen, funding). Shranjeno v brskalniku te naprave. Majhen vzorec ni dokaz.\nSignal »nakupni pritisk« velja za Alpha žetone (tudi brez futures): število nakupov proti prodajam v 1 uri in dolarji iz zadnjih trgovanj (nastavitve). Izid je sprememba cene z DEXScreenerja po 15 min, 1 h in 3 h (iz svečk GeckoTerminal)."],
   sec_trend: ["Trend zadnja ura", "Posnetki futures podatkov (cena, OI v količini, promet, taker, L/S, funding) se shranijo ob osveževanju futures panela, največ enkrat na 5 min na kovanec, in se hranijo 24 h v tej napravi. Vsak stolpec kaže 15-min obdobje do navedene ure. Taker in L/S sta samo za kovance, ki so bili v top 10 panela. Posnetki se zapisujejo samo, ko je stran odprta."],
-  sec_log: ["Dnevnik", "Vsako osveževanje futures panela se zapiše v urni zapis (cena, promet, OI, rast volumna po kovancih). Hrani se 7 dni, dnevni povzetki ostanejo.\nZapolni luknje: za zadnjih 24 h, kjer je bilo skenov manj kot 10, povleče 5-min svečke in OI zgodovino z Binance za do 40 kovancev. Signalov ne ustvarja nazaj.\nPovzetek dneva: kovanci z rastjo volumna, signali (brez dvojnikov 15 min/1 h), mediana urne spremembe cene, skupen promet, zadnji OI in 3 ure z največ prometa."],
+  sec_log: ["Dnevnik", "Stolpci: Ura = začetek ure. Kov. = kovanci z rastjo prometa nad pragom. Sig. in Opoz. = število signalov in opozoril v uri. Cena = mediana urne spremembe cene kovancev. Promet = futures promet. OI = velikost OI v $. Spot = mediana urne spremembe spot cene. Spot prom. = spot promet 1 h. Skeni = število osveževanj v uri (rumeno = luknja, zap. = zapolnjeno iz Binance svečk). Pod vrstico so kovanci z rastjo prometa (x) in urno spremembo cene.\nVsako osveževanje futures panela se zapiše v urni zapis (cena, promet, OI, rast volumna po kovancih). Hrani se 7 dni, dnevni povzetki ostanejo.\nZapolni luknje: za zadnjih 24 h, kjer je bilo skenov manj kot 10, povleče 5-min svečke in OI zgodovino z Binance za do 40 kovancev. Signalov ne ustvarja nazaj.\nPovzetek dneva: kovanci z rastjo volumna, signali (brez dvojnikov 15 min/1 h), mediana urne spremembe cene, skupen promet, zadnji OI in 3 ure z največ prometa."],
   sec_check: ["Preveri žeton", "Prilepi naslov pogodbe. DEXScreener najde pare in izbere tistega z največ likvidnosti, veriga se zazna sama. Viri: DEXScreener (cene, likvidnost, promet), GoPlus (varnost pogodbe, EVM), GeckoTerminal (svečke in zadnja trgovanja). Pregled ni napoved cene."],
   sec_gibanje: ["Gibanje", "Sprememba cene je z glavnega para (DEXScreener). Promet in število nakupov/prodaj sta seštevek vseh parov žetona. Vrstica 15 min je izračunana iz svečk GeckoTerminal glavnega para, zato je približna.\nGraf kaže zadnjih 60 svečk po 5 min, 15 min ali 1 uro, pod njimi je promet."],
   sec_okvir: ["Okvir trejda", "Izračun za razmislek, ne priporočilo. Vneseš znesek, stop, cilj in provizijo.\nZdrs je ocena po formuli za klasičen bazen: znesek proti polovici likvidnosti glavnega para. Pri V3 bazenih je dejanski zdrs lahko manjši. Strošek kroga = 2 × provizija + 2 × zdrs. Cena in likvidnost sta z DEXScreenerja."],
@@ -356,6 +358,42 @@ var INFO = {
   sec_flow: ["Promet po vrsti trgovcev", "Zadnjih ~300 trgovanj glavnega para (GeckoTerminal), razvrščenih po denarnici, ki je trgovanje sprožila.\nBot: veliko trgovanj, enake velikosti, hiter ritem ali nakup in prodaja v istem bloku. Kit: trgovanje nad večjim od $2K in 1 % likvidnosti (če ni bot). Normalen: ostali.\nTo je ocena po pravilih, ne dokaz. Lovci na Alpha točke so pogosto videti kot boti."],
   sec_holders: ["Top imetniki", "Top 10 imetnikov po GoPlusu, deleži so od skupne ponudbe. Oznaka (npr. borza, bazen) je iz GoPlusa, če obstaja. Povezava odpre transfere denarnice za ta žeton na explorerju.\nStolpec Trgovanja se izpolni samo, če je imetnik sam trgoval prek glavnega bazena v zadnjih ~300 trgovanjih."],
 
+  abbr: ["Kratice signalov in opozoril", "Signali (iz gibanja cene in OI):\nsq = squeeze: cena gor, OI dol (shorti zapirajo pozicije)\nnl = nove pozicije: cena gor, OI gor\nns = novi shorti: cena dol, OI gor\nlq = likvidacije: cena dol, OI dol\nbp = nakupni pritisk (spot): nakupi proti prodajam po številu in v USD\nOpozorila:\n⚑5m = spot cena v 5 min nad pragom\n⚑OI = skok open interesta v 5 min\n⚑tk = skok taker prometa proti povprečju\n⚑15m = futures cena v 15 min (±)\n⚑1h = futures cena v 1 h (±)\n⚡ = skok spot prometa v 1 h"],
+  sec_sum: ["Povzetek", "Izbor iz razdelkov Trg, Varnost in Promet po trgovcih: prikažejo se samo rumeni in rdeči kazalniki, zeleni so le prešteti. Vrstica Futures kaže stanje v 1 h iz Binance Futures (cena, OI, rast volumna, funding, L/S, taker). To je samo povzetek, ne napoved cene."],
+  sec_coinev: ["Signali in opozorila kovanca", "Vsi zabeleženi signali in opozorila za ta kovanec (shranjeni v tej napravi). Izid = sprememba cene po 15 min, 30 min, 1 h in 3 h od trenutka dogodka. »…« = izid še ni znan, »–« = ni podatka. Izidi se dopolnijo naknadno iz Binance minutnih svečk (futures) ali GeckoTerminala (spot), tudi če je bila stran vmes zaprta.\n" + ABBR],
+  sec_win: ["Časovno okno trgovanj", "Zbrana trgovanja (GeckoTerminal, do 24 h, shranjena v brskalniku) lahko segajo daleč nazaj. Trak Od/Do ali čas v polju (npr. 04:25-06:15) zoži okno. Velja za razdelka Promet po vrsti trgovcev in Top imetniki ter za kopiranje podatkov. Opozorilo ⚠ pomeni, da zbirka ne pokriva izbranega časa."],
+  sec_trg: ["Trg", "Razmerja iz DEXScreenerja, likvidnost in promet po potrebi iz GeckoTerminala ali Binance Alpha (vzame se večja vrednost). Zeleno = nižje tveganje, rumeno = previdnost, rdeče = visoko tveganje. Pragovi so splošna pravila, ne jamstvo. Tapni ⓘ pri vrstici za razlago."],
+  sec_pairs: ["Pari", "Vsi DEX bazeni tega žetona po DEXScreenerju, največja likvidnost prva. Prikazanih je do 5. Likvidnost = denar v bazenu, promet 24 h = obseg trgovanja v bazenu."],
+  sec_links: ["Povezave", "Hitre povezave na zunanje strani za ta naslov: DEXScreener, GeckoTerminal, explorer, imetniki, GoPlus poročilo, RugCheck (Solana), CoinGecko in iskanje na X."],
+  sec_deep: ["Za poglobitev", "Povezave do bazenov in prenosov žetona s časi ter imetnikov. Za zgodovino izven zajetega okna. Odpri v brskalniku in podatke po želji pošlji kot posnetek ali besedilo."],
+  sec_lgcoin: ["Dnevnik kovanca (24 h po urah)", "Vrstice iz zavihka Dnevnik za ta kovanec. Fut. = futures sprememba cene v uri, Fut. prom. = futures promet 1 h, OI = velikost OI v $, Vol x = rast prometa v 15 min proti prejšnjemu, Spot = spot sprememba cene v uri, Spot prom. = spot promet 1 h, Nak:prod = nakupi proti prodajam (število), Likv. = likvidnost. Dog. = signali in opozorila v tej uri s kraticami.\n* = zapolnjeno iz Binance svečk.\n" + ABBR],
+  sec_lead: ["Voditelji 6 h", "Futures kovanci Alpha seznama s prometom 6 h nad pragom iz nastavitev. Uvrstitev = vsota mest po treh merilih: sprememba cene 6 h, futures promet 6 h in sprememba OI 6 h (mesta so v oklepaju, 1 = najboljši). Top 8. Signali se beležijo samo za voditelje."],
+  sec_top6: ["Top kovanci 6 h", "Do 5 futures kovancev z najvišjo rastjo volumna v zadnjih 6 h (iz dnevnika) in do 3 Alpha kovanci brez futures (po rasti cene v 1 h). Vsak ima tabelo po 30 min kot v Pregledu žetona. Oranžna številka = ekstrem (promet nad 2x mediane, cena nad 3 %, OI nad pragom, taker nad 1,5 ali pod 0,67). Dog. = kratice signalov in opozoril. " + ABBR],
+  sec_dflow: ["Promet po vrsti trgovcev · zbirka", "Kovanci, za katere si v zavihku Žeton zbiral trgovanja (največ 4, zadnjih 24 h). Deleži normalnih trgovcev, kitov in botov so del prometa v izbranem oknu. Neto = nakupi minus prodaje brez botov. Razvrstitev je ocena po pravilih, lovci na Alpha točke so pogosto videti kot boti. Tapni kovanec za podrobnosti po urah."],
+  sec_health: ["Zdravje podatkov", "Kontrolni seznam virov (Alpha/DEXScreener, futures, GeckoTerminal) in kovancev z luknjami. Težave se beležijo z začetkom in trajanjem, stran jih skuša sama rešiti (do 2 poskusa, drug vir). Pop. = število poskusov popravka. Brez 5 min ali 1 h pri kovancu brez trgovanj ni težava."],
+  sec_ana: ["Analiza podatkov", "Prilepi besedilo iz gumba »Kopiraj: ostali podatki«. Izračun poteka lokalno: najboljši in najslabši spot, futures stanja, signali in opozorila po skupinah (povprečje in delež pozitivnih izidov), zgodovina posnetkov in dnevni povzetki. Majhen vzorec ni dokaz."],
+  sec_watch: ["Moj seznam", "Shranjeni naslovi žetonov (gumb Shrani v seznam). Tapni žeton za pregled, ✕ ga odstrani. Shranjeno v brskalniku te naprave."],
+  set_lead: ["Voditelji: prag prometa", "Najmanjši futures promet 6 h v milijonih USD, da je kovanec sploh upoštevan za uvrstitev med voditelje in za beleženje signalov."],
+  set_px15: ["Opozorilo futures cena 15 min", "Opozori, ko se futures cena v 15 min spremeni za več kot ta prag navzgor ali navzdol. Računa se iz 5-min svečk: zadnja cena proti zaprtju 3 svečke nazaj (okno 15 do 20 min). Velja za vse pregledane futures kovance. Kratica ⚑15m."],
+  set_px1h: ["Opozorilo futures cena 1 h", "Enako kot pri 15 min, a za 1 uro (12 svečk nazaj). Kratica ⚑1h."],
+  set_ntfy: ["Push na telefon", "Če vpišeš ntfy.sh temo, se vsako opozorilo pošlje tudi kot obvestilo. Tema naj bo dolga in naključna, ker je javna. Vpiši samo na glavni napravi."],
+  set_fill: ["Zapolni luknje ob odprtju", "Ob odprtju strani se za zadnjih 24 h dopolnijo ure, kjer je bilo skenov premalo, iz Binance svečk (samo futures kovanci, povezani z Alpha, največ 40)."],
+  d_up: ["Kovanci dneva: rast cene", "Top 10 futures kovancev po spremembi cene čez dan: od prve do zadnje cene v dnevniku. V oklepaju najvišja urna rast in največja rast prometa (x proti prejšnjemu 15-min oknu)."],
+  d_dn: ["Najbolj negativni", "Do 5 kovancev z največjim padcem cene čez dan, isti izračun kot pri rasti."],
+  d_sup: ["Spot: največja rast cene", "Top 10 spot žetonov po spremembi cene čez dan iz urnih spot posnetkov (DEXScreener). V oklepaju najvišja urna rast in seštevek urnih prometov. Beleži samo žetone, ki so skozi filter prometa."],
+  d_sdn: ["Spot: najbolj negativni", "Do 5 spot žetonov z največjim padcem cene čez dan."],
+  d_vol: ["Največja rast volumna", "Kovanci z najvišjo rastjo futures prometa v 15 min proti prejšnjemu oknu, najvišja vrednost čez dan."],
+  d_sig: ["Signali (brez dvojnikov)", "Število signalov tega dne. Isti signal v 15 min in 1 h oknu se šteje enkrat."],
+  d_al: ["Opozorila", "Število opozoril tega dne: ⚑5m, ⚑OI, ⚑tk, ⚑15m, ⚑1h in ⚡."],
+  d_med: ["Mediana urne spremembe cene", "Za vsako uro mediana sprememb cene vseh pregledanih kovancev, nato mediana teh ur. Kaže splošno smer trga, ne posameznih kovancev."],
+  d_tv: ["Skupen futures promet", "Seštevek urnih futures prometov pregledanih kovancev v USDT."],
+  d_oi: ["OI (zadnja ura)", "Skupna velikost open interesta v dolarjih pri zadnji uri dneva. Za primerjavo cene uporabljam količino pogodb, tu pa dolarje."],
+  d_top: ["Vrhnje ure po prometu", "Tri ure z največjim futures prometom. Pod tem je število ur v zapisu in lukenj (ure z malo skeni)."],
+  h_alpha: ["Alpha seznam in DEXScreener", "Starost zadnjega skena, število paketov DEXScreenerja (po 30 naslovov), neuspeli paketi in trajanje skena. Kovanci brez DEX podatkov imajo promet 24 h nad pragom, a DEXScreener zanje ni vrnil para."],
+  h_holes: ["Alpha kovanci z luknjami", "Kovanci, kjer manjka cena ali glavni bazen ni viden. Stran jih sama popravlja prek GeckoTerminala ali Binance Alpha svečk."],
+  h_fut: ["Futures sken", "Starost zadnjega skena, število pregledanih kovancev in tisti z manjkajočim OI ali svečkami. Če je Binance omejil dostop, je to tu zapisano s časom počitka."],
+  h_gt: ["GeckoTerminal vrsta", "Vsi zahtevki GeckoTerminala gredo skozi eno vrsto (okoli 30 na minuto). Čakalna vrsta in število neuspelih zahtevkov od odprtja strani."],
+  f_sum: ["Futures (1 h)", "Stanje futures para v 1 uri: stanje iz cene in OI, rast prometa, funding, razmerje L/S in taker. Opozorilo pri skrajnem fundingu ali natrpanih longih."],
   main_pool: ["Glavni bazen", "DEXScreener včasih ne vidi največjega bazena (npr. Uniswap V4). Aplikacija zato bazene dodatno poišče na GeckoTerminalu. Če drugi viri (GeckoTerminal, Binance Alpha) kažejo več kot dvakrat več likvidnosti, kot jo vidi aplikacija, se pokaže to opozorilo: cena, graf, trgovci in zdrs so lahko z majhnega bazena."],
   bn_alpha: ["Binance Alpha", "Likvidnost, MCAP, FDV in imetniki iz Binanceovega seznama Alpha. Imena polj nisem preveril, zato vrstica pokaže »brez podatkov«, če jih ne prepozna. Če je DEXScreenerjev MCAP enak FDV, aplikacija uporabi Binanceova."],
   gp_miss: ["Manjkajoči podatki GoPlusa", "GoPlus za ta žeton ni vrnil vseh polj. Manjkajoče vrstice niso prikazane kot »varno«, ampak so navedene tu. Preveri jih ročno."],
@@ -449,7 +487,7 @@ var INFO_BY_LABEL = {
   "Imetniki": "holders_n", "Top 10 denarnic": "top10", "Delež ustvarjalca": "creator",
   "Normalni trgovci": "cls_normal", "Kiti (velika trgovanja)": "cls_whale", "Boti in lovci na točke": "cls_bot",
   "Največji preskok cene": "jump", "Največji 5-min promet": "spike5", "Največje trgovanje": "bigtrade",
-  "Top 5 imetnikov": "top5", "Top 5 brez pogodb in zaklenjenih": "top5free",
+  "Top 5 imetnikov": "top5", "Kovanci dneva: največja rast cene": "d_up", "Najbolj negativni": "d_dn", "Spot: največja rast cene": "d_sup", "Spot: najbolj negativni": "d_sdn", "Največja rast volumna": "d_vol", "Signali (brez dvojnikov)": "d_sig", "Opozorila": "d_al", "Mediana urne spremembe cene": "d_med", "Skupen futures promet": "d_tv", "OI (zadnja ura)": "d_oi", "Vrhnje ure po prometu": "d_top", "Alpha seznam in DEXScreener": "h_alpha", "Alpha kovanci z luknjami": "h_holes", "Futures sken": "h_fut", "GeckoTerminal vrsta": "h_gt", "Futures (1 h)": "f_sum", "Top 5 brez pogodb in zaklenjenih": "top5free",
   "Zdrs vnosa (ocena)": "slip", "Strošek kroga (vstop + izstop)": "cost", "Stop": "stop", "Cilj": "target",
   "Dobiček : tveganje (neto)": "rr", "Vnos za zdrs pod 1 %": "maxamt", "Najnižja cena zadnje ure": "low1h"
 };
@@ -1217,17 +1255,17 @@ async function run(){
     '<div class="card chartbox" id="chart"><div class="loading">Nalagam graf…</div></div>' +
     '<h2>Zadnjih 15 min po 5 min' + infoBtn('sec_b15') + '</h2>' + note('Promet in cena iz minutnih svečk glavnega para (GeckoTerminal), ne glede na število trgovanj. Ne pove, kdo je trgoval.') + '<div class="card" id="b15" style="overflow-x:auto"><div class="loading">Nalagam…</div></div>' +
     '<h2>Zadnjih 6 ur po 30 min' + infoBtn('sec_h6') + '</h2>' + note('Spot (GeckoTerminal, glavni bazen) in futures (Binance), če ima žeton par. Podatki se povlečejo ob preverjanju.') + '<div class="card" id="h6" style="overflow-x:auto"><div class="loading">Nalagam…</div></div>' +
-    '<h2>Dnevnik (24 h po urah)' + infoBtn('sec_log') + '</h2>' + note('Zapisi iz zavihka Dnevnik za ta kovanec (futures).') + '<div class="card" id="lgcoin" style="overflow-x:auto"><div class="loading">Nalagam…</div></div>' +
-    '<h2>Signali in opozorila</h2>' + note('Zabeleženi signali in opozorila za ta kovanec, z izidi po 15 min, 30 min, 1 h in 3 h.') + '<div class="card" id="coinev" style="padding:4px 10px"></div>' +
-    '<h2>Časovno okno trgovanj</h2>' + note('Zbrana trgovanja lahko segajo daleč nazaj. S trakom ali s časom zgoraj (npr. 04:25-06:15) izbereš okno, ki te zanima. Velja za razdelka Promet po vrsti trgovcev in Top imetniki ter za kopiranje.') + winCtlHtml("f") +
+    '<h2>Dnevnik (24 h po urah)' + infoBtn('sec_lgcoin') + '</h2>' + note('Zapisi iz zavihka Dnevnik za ta kovanec (futures).') + '<div class="card" id="lgcoin" style="overflow-x:auto"><div class="loading">Nalagam…</div></div>' +
+    '<h2>Signali in opozorila' + infoBtn('sec_coinev') + '</h2>' + note('Zabeleženi signali in opozorila za ta kovanec, z izidi po 15 min, 30 min, 1 h in 3 h.') + '<div class="card" id="coinev" style="padding:4px 10px"></div>' +
+    '<h2>Časovno okno trgovanj' + infoBtn('sec_win') + '</h2>' + note('Zbrana trgovanja lahko segajo daleč nazaj. S trakom ali s časom zgoraj (npr. 04:25-06:15) izbereš okno, ki te zanima. Velja za razdelka Promet po vrsti trgovcev in Top imetniki ter za kopiranje.') + winCtlHtml("f") +
     '<div id="flow"><div class="loading">Nalagam promet in imetnike…</div></div>' +
     '<h2>Okvir trejda' + infoBtn('sec_okvir') + '</h2>' + note('Izračun za tvoj znesek: zdrs, stroški in razmerje dobiček : tveganje. Podatki: cena in likvidnost glavnega para.') + '<div class="card" id="tframe"></div>' +
-    '<h2>Trg</h2>' + note('Razmerja iz DEXScreenerja, likvidnost in promet po potrebi iz GeckoTerminala (večja vrednost). Zeleno = nižje, rumeno = previdnost, rdeče = visoko tveganje. Pragovi so splošna pravila, ne jamstvo.') + '<div class="card">' + rows.join("") + '</div>' +
+    '<h2>Trg' + infoBtn('sec_trg') + '</h2>' + note('Razmerja iz DEXScreenerja, likvidnost in promet po potrebi iz GeckoTerminala (večja vrednost). Zeleno = nižje, rumeno = previdnost, rdeče = visoko tveganje. Pragovi so splošna pravila, ne jamstvo.') + '<div class="card">' + rows.join("") + '</div>' +
     '<h2>Varnost pogodbe' + infoBtn('sec_varnost') + '</h2>' + note('GoPlus preveri pogodbo: honeypot, davke, lastništvo, imetnike. Deluje za EVM verige, za Solano uporabi RugCheck.') +
     (secRows.length ? '<div class="card">' + secRows.join("") + '</div>' : '') +
     (secNote ? '<div class="msg">' + esc(secNote) + '</div>' : '') +
-    '<h2>Pari</h2>' + note('Vsi DEX bazeni tega žetona (DEXScreener), največja likvidnost prva.') + pairsTable(list) +
-    '<div id="deep"></div><h2>Povezave</h2>' + note('Hitre povezave na zunanje strani za ta naslov.') + linkSet(addr, chainKey, p);
+    '<h2>Pari' + infoBtn('sec_pairs') + '</h2>' + note('Vsi DEX bazeni tega žetona (DEXScreener), največja likvidnost prva.') + pairsTable(list) +
+    '<div id="deep"></div><h2>Povezave' + infoBtn('sec_links') + '</h2>' + note('Hitre povezave na zunanje strani za ta naslov.') + linkSet(addr, chainKey, p);
 
   curPair = p; curChain = chainKey;
   winSync("f");
@@ -1326,8 +1364,8 @@ function build6h(spot, fut, now, evs){
   var fT = (f0.fo > 0 && f1.fc != null) ? (f1.fc / f0.fo - 1) * 100 : null;
   var o0 = prevOi(shown[0]); if (o0 == null) o0 = f0.oi;
   var oT = (o0 > 0 && f1.oi != null) ? (f1.oi / o0 - 1) * 100 : null;
-  return '<table class="pairs motion"><thead><tr><th>Čas</th><th>Spot</th><th>Spot prom.</th><th>Fut.</th><th>Fut. prom.</th><th>OI</th><th>Taker</th><th>L/S</th><th>Dog.</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-    '<div class="cap">Obdobij: ' + shown.length + ' po 30 min (najnovejše zgoraj, * še teče). Skupaj: spot ' + esc(sgn(sT)) + (fut ? ' · futures ' + esc(sgn(fT)) + ' · OI ' + esc(sgn(oT)) : ' · futures: ni podatkov ali para') + '. Spot promet je samo glavni par.</div>';
+  return '<table class="pairs motion"><thead><tr><th>Čas</th><th>Spot</th><th>Spot prom.</th><th>Fut.</th><th>Fut. prom.</th><th>OI</th><th>Taker</th><th>L/S</th><th>Dog.' + infoBtn('abbr') + '</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<div class="cap">Obdobij: ' + shown.length + ' po 30 min (najnovejše zgoraj, * še teče). Skupaj: spot ' + esc(sgn(sT)) + (fut ? ' · futures ' + esc(sgn(fT)) + ' · OI ' + esc(sgn(oT)) : ' · futures: ni podatkov ali para') + '. Spot promet je samo glavni par. Dog. = ' + esc(ABBR) + '</div>';
 }
 async function load6h(my){
   var box = $("h6");
@@ -1347,7 +1385,7 @@ function renderSummary(){
   var bad = sumCol.filter(function(x){ return x.level === "red" || x.level === "amber"; })
     .sort(function(a, b){ return levelRank(b.level) - levelRank(a.level); });
   var g = sumCol.filter(function(x){ return x.level === "green"; }).length;
-  var h = '<h2>Povzetek</h2><div class="card">';
+  var h = '<h2>Povzetek' + infoBtn('sec_sum') + '</h2><div class="card">';
   h += bad.length ? bad.map(function(x){ return metric(x.label, x.value, "", x.level); }).join("")
     : '<div class="loading">Ni rumenih ali rdečih kazalnikov.</div>';
   if (sumFut === false) h += metric("Futures", "ni para", "Ni para na Binance Futures.", "");
@@ -2257,6 +2295,7 @@ function announceSignals(list){
 }
 var EVSHORT = {squeeze: "sq", newlong: "nl", newshort: "ns", liq: "lq", buyp: "bp", a_px: "⚑5m", a_oi: "⚑OI", a_tk: "⚑tk", a_px15: "⚑15m", a_px1h: "⚑1h", a_jump: "⚡"};
 function isAl(s){ return !!(s && typeof s.st === "string" && s.st.indexOf("a_") === 0); }
+function evTxtH(h, evs){ return (evs || []).filter(function(e){ return Math.floor(e.t / HMS) === h; }).map(function(e){ return EVSHORT[e.st] || e.st; }).join(", "); }
 function evTxt(k, evs){ return (evs || []).filter(function(e){ return Math.floor(e.t / H6MS) === k; }).map(function(e){ return EVSHORT[e.st] || e.st; }).join(", "); }
 function logAlert(kind, per, c, p0, text, spotRow){
   alertLog.unshift({sym: c.label, addr: c.addr, rest: text, time: new Date().toLocaleTimeString("sl-SI")});
@@ -3073,7 +3112,7 @@ function deepLinks(addr, chainKey, list){
     var bm = {bsc: "bsc", ethereum: "eth", base: "base", solana: "solana", arbitrum: "arbitrum", polygon: "polygon"}[chainKey];
     if (bm) l.push(["Bubblemaps (nepreverjeno)", "https://app.bubblemaps.io/" + bm + "/token/" + encodeURIComponent(addr)]);
   }
-  return '<h2>Za poglobitev</h2>' + note('Zgodovina trgovanj in denarnic izven zajetega okna. Odpri v brskalniku, podatke mi pošlji kot posnetek ali besedilo.') +
+  return '<h2>Za poglobitev' + infoBtn('sec_deep') + '</h2>' + note('Zgodovina trgovanj in denarnic izven zajetega okna. Odpri v brskalniku, podatke mi pošlji kot posnetek ali besedilo.') +
     '<div class="links">' + l.map(function(x){ return '<a href="' + esc(x[1]) + '" target="_blank" rel="noopener">' + esc(x[0]) + '</a>'; }).join("") + '</div>';
 }
 function txt(el){
@@ -3402,15 +3441,15 @@ async function renderLogCoin(my){
   try {
     var e = matchFut({sym: curTF.sym, price: curTF.price}, await getFutInfo(), await getTicks());
     if (my !== runCounter) return;
-    var L = loadLog(), fs = e ? e.symbol : null, ss = curTF.sym;
+    var L = loadLog(), fs = e ? e.symbol : null, ss = curTF.sym, evs = eventsFor(ss, lastAddr);
     var hs = Object.keys(L).map(Number).sort(function(a, b){ return b - a; }).filter(function(h){ return (fs && L[h].c[fs]) || spOf(L[h], ss); }).slice(0, 24);
     if (!hs.length) { box.innerHTML = '<div class="msg" style="margin:6px">Za ta kovanec še ni zapisov' + (e ? '' : ' (ni futures para)') + '.</div>'; return; }
-    box.innerHTML = '<table class="pairs motion"><thead><tr><th>Ura</th><th>Fut.</th><th>Fut. prom.</th><th>OI</th><th>Vol x</th><th>Spot</th><th>Spot prom.</th><th>Nak:prod</th><th>Likv.</th></tr></thead><tbody>' +
+    box.innerHTML = '<table class="pairs motion"><thead><tr><th>Ura</th><th>Fut.</th><th>Fut. prom.</th><th>OI</th><th>Vol x</th><th>Spot</th><th>Spot prom.</th><th>Nak:prod</th><th>Likv.</th><th>Dog.' + infoBtn('abbr') + '</th></tr></thead><tbody>' +
       hs.map(function(h){
         var c = (fs && L[h].c[fs]) || null, q = spOf(L[h], ss);
         return '<tr><td>' + hhmm(h * HMS) + (L[h].b ? '*' : '') + '</td><td>' + (c ? cv(c.p0 > 0 ? (c.p1 / c.p0 - 1) * 100 : null) : '–') + '</td><td>' + (c ? esc(usd(c.v)) : '–') + '</td><td>' + (c ? esc(usd(c.o)) : '–') + '</td><td>' + (c ? esc(fr(c.x)) : '–') + '</td><td>' +
-          (q ? cv(q.p0 > 0 && q.p1 > 0 ? (q.p1 / q.p0 - 1) * 100 : null) : '–') + '</td><td>' + (q ? esc(usd(q.v)) : '–') + '</td><td>' + (q ? esc(q.b + ':' + q.n) : '–') + '</td><td>' + (q ? esc(usd(q.l)) : '–') + '</td></tr>';
-      }).join("") + '</tbody></table><div class="cap">* = zapolnjeno iz Binance svečk. Spot se beleži od te posodobitve naprej (promet = 1 h posnetek ob koncu ure).</div>';
+          (q ? cv(q.p0 > 0 && q.p1 > 0 ? (q.p1 / q.p0 - 1) * 100 : null) : '–') + '</td><td>' + (q ? esc(usd(q.v)) : '–') + '</td><td>' + (q ? esc(q.b + ':' + q.n) : '–') + '</td><td>' + (q ? esc(usd(q.l)) : '–') + '</td><td class="stat">' + esc(evTxtH(h, evs)) + '</td></tr>';
+      }).join("") + '</tbody></table><div class="cap">Dog. = signali in opozorila v uri: ' + esc(ABBR) + '. * = zapolnjeno iz Binance svečk. Spot se beleži od te posodobitve naprej (promet = 1 h posnetek ob koncu ure).</div>';
   } catch (er) { if (my === runCounter) box.innerHTML = '<div class="msg err" style="margin:6px">' + esc(er.message) + '</div>'; }
 }
 async function fillGaps(){
