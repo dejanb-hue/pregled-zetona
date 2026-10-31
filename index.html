@@ -2221,6 +2221,12 @@ function renderHealth(){
 }
 hLoad(); hCompact();
 /* ---------- beleženje signalov ---------- */
+var sgOpen = {};
+document.addEventListener("toggle", function(e){
+  var d = e.target, k = d && d.getAttribute ? d.getAttribute("data-k") : null;
+  if (!k || !d.classList.contains("sg")) return;
+  if (d.open) sgOpen[k] = 1; else delete sgOpen[k];
+}, true);
 var SIG_KEY = "ct_sig";
 var OI_MAX = 50;
 function sigOk(s){
@@ -2374,7 +2380,7 @@ function sigDetail(s, brief, nb){
 }
 function evRow(s){
   var when = new Date(s.t).toLocaleString("sl-SI", {day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit"});
-  return '<details class="sg"><summary><div class="top"><span><b>' + esc(s.label) + '</b> <span class="stat">' + esc(TFL[s.per] + " · " + (STATE_NAMES[s.st] || s.st)) + '</span></span><span class="stat">' + esc(when) + '</span></div>' +
+  return '<details class="sg" data-k="e' + esc(s.id) + '"' + (sgOpen["e" + s.id] ? ' open' : '') + '><summary><div class="top"><span><b>' + esc(s.label) + '</b> <span class="stat">' + esc(TFL[s.per] + " · " + (STATE_NAMES[s.st] || s.st)) + '</span></span><span class="stat">' + esc(when) + '</span></div>' +
     '<div class="sgcells">' + HORIZ.map(function(h){ return '<div><span class="stat">po ' + OUTL[h.k] + '</span><br>' + outCell(s.o && s.o[h.k]) + '</div>'; }).join("") + '</div></summary>' +
     '<div class="sgbody">' + sigDetail(s, true) + '</div></details>';
 }
@@ -2397,7 +2403,8 @@ function grpHtml(arr, word){
   if (!keys.length) return '<div class="loading">Še ni zapisov.</div>';
   return keys.map(function(k){
     var g = groups[k];
-    return '<details class="sg"><summary><div class="top"><span><b>' + esc(TFL[g.per] + " · " + (STATE_NAMES[g.st] || g.st) + (g.dir === "-" ? " · padec" : g.dir === "+" ? " · rast" : "")) + '</b></span><span class="stat">' + (word ? g.n + " dogodkov" : sigWord(g.n)) + '</span></div>' +
+    var kk = "s" + k + (word ? "a" : "");
+    return '<details class="sg" data-k="' + esc(kk) + '"' + (sgOpen[kk] ? ' open' : '') + '><summary><div class="top"><span><b>' + esc(TFL[g.per] + " · " + (STATE_NAMES[g.st] || g.st) + (g.dir === "-" ? " · padec" : g.dir === "+" ? " · rast" : "")) + '</b></span><span class="stat">' + (word ? g.n + " dogodkov" : sigWord(g.n)) + '</span></div>' +
       '<div class="sgcells">' + HORIZ.map(function(h){ return '<div><span class="stat">po ' + OUTL[h.k] + '</span><br>' + cellAvg(g.r[h.k]) + '</div>'; }).join("") + '</div></summary>' +
       '<div class="sgbody">' + g.list.slice().reverse().map(function(s){ return sigDetail(s, false); }).join("") + '</div></details>';
   }).join("");
@@ -2409,7 +2416,7 @@ function coinGroupHtml(all){
   return ks.map(function(k){
     var a = by[k], ns = a.filter(function(x){ return !isAl(x); }).length, last = a[a.length - 1];
     var cells = ["15m", "30m", "1h"].map(function(h){ var v = avgOf(a.map(function(x){ return x.o && x.o[h]; })); return '<div><span class="stat">povpr. ' + OUTL[h] + '</span><br>' + (v == null ? "…" : cv(v)) + '</div>'; }).join("");
-    return '<details class="sg"><summary><div class="top"><span><b>' + esc(k) + '</b></span><span class="stat">' + ns + ' sig. · ' + (a.length - ns) + ' opoz. · ' + esc(new Date(last.t).toLocaleString("sl-SI", {day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit"})) + '</span></div><div class="sgcells">' + cells + '</div></summary>' +
+    return '<details class="sg" data-k="c' + esc(k) + '"' + (sgOpen["c" + k] ? ' open' : '') + '><summary><div class="top"><span><b>' + esc(k) + '</b></span><span class="stat">' + ns + ' sig. · ' + (a.length - ns) + ' opoz. · ' + esc(new Date(last.t).toLocaleString("sl-SI", {day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit"})) + '</span></div><div class="sgcells">' + cells + '</div></summary>' +
       '<div class="sgbody">' + a.slice().reverse().map(function(s){ return sigDetail(s, false, true); }).join("") + '</div></details>';
   }).join("");
 }
@@ -2422,13 +2429,14 @@ function renderSigs(){
     return;
   }
   var sg = sigs.filter(function(s){ return !isAl(s); }), al = sigs.filter(isAl);
-  var rhtml = sigs.slice(-8).reverse().map(evRow).join("");
+  var sy = window.scrollY, rec = sigs.filter(function(s){ return s.t > Date.now() - 3 * 3600000; }), rhtml = (rec.length ? rec : sigs.slice(-8)).slice().reverse().map(evRow).join("");
   box.innerHTML =
     '<div class="cap">Skupaj ' + sigWord(sg.length) + ' in ' + al.length + ' opozoril' + (dups ? ' (brez ' + dups + ' dvojnikov)' : '') + (bad.length ? ' (izločeno kot sumljivo, OI nad ' + OI_MAX + ' % ali lažni skok prometa »prej $0«: ' + bad.length + ')' : '') + '. Tapni skupino ali kovanec za podrobnosti. ' + infoBtn('s_read') + '</div>' +
     '<div class="cap" style="margin-top:8px"><b>Signali</b></div>' + grpHtml(sg, false) +
     '<div class="cap" style="margin-top:12px"><b>Opozorila</b> (cena, OI, taker, skok prometa) z izidi po 15 min, 30 min, 1 h in 3 h</div>' + grpHtml(al, true) +
     '<div class="cap" style="margin-top:12px"><b>Združeno po kovancih</b> (tapni kovanec za seznam)</div>' + coinGroupHtml(sigs) +
-    '<div class="cap" style="margin-top:12px">Zadnji dogodki</div>' + rhtml;
+    '<div class="cap" style="margin-top:12px">Zadnji dogodki: ' + (rec.length ? 'vsi iz zadnjih 3 h (' + rec.length + ')' : 'zadnjih 8 (v 3 h ni novih)') + ', z izidi po 15 min, 30 min, 1 h in 3 h</div>' + rhtml;
+  window.scrollTo(0, sy);
   renderCoinEv();
 }
 
