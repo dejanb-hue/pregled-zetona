@@ -556,7 +556,7 @@ async function mergeGtPools(chainKey, addr, list, p){
   list.forEach(function(x){ have[String(x.pairAddress).toLowerCase()] = 1; });
   arr.forEach(function(x){
     var a = x.attributes || {}, ad = String(a.address || "").toLowerCase(), res = pf(a.reserve_in_usd);
-    if (!ad || have[ad] || !(res >= 1000)) return;
+    if (!ad || have[ad] || !(res >= 1000) || !(pf((a.volume_usd || {}).h24) > 0)) return;
     var rl = x.relationships || {}, bt = rl.base_token && rl.base_token.data && rl.base_token.data.id;
     if (bt && String(bt).toLowerCase().slice(-al.length) !== al) return;
     if (list.some(function(y){ var l = (y.liquidity && y.liquidity.usd) || 0; return l > 0 && Math.abs(l - res) / res < 0.05; })) return;
@@ -573,7 +573,7 @@ async function mergeGtPools(chainKey, addr, list, p){
       fdv: pf(a.fdv_usd), marketCap: pf(a.market_cap_usd), pairCreatedAt: Date.parse(a.pool_created_at) || null});
   });
   if (!add.length) return none;
-  var nl = list.concat(add).sort(function(x, y){ return ((y.liquidity && y.liquidity.usd) || 0) - ((x.liquidity && x.liquidity.usd) || 0); });
+  var nl = list.concat(add).sort(pairCmp);
   var top = add.slice().sort(function(x, y){ return y.liquidity.usd - x.liquidity.usd; }).slice(0, 2)
     .map(function(x){ return x.dexId + " " + usd(x.liquidity.usd); }).join(", ");
   return {added: add.length, list: nl, note: "DEXScreener ni imel vseh bazenov. Iz GeckoTerminala dodano: " + top + (nl[0] === add[0] || add.indexOf(nl[0]) > -1 ? ". Cena, graf in trgovanja so zdaj z največjega bazena." : ".")};
@@ -599,15 +599,19 @@ async function fetchGT(chainKey, addr){
   return {liq: pf(a.total_reserve_in_usd), mc: pf(a.market_cap_usd), fdv: pf(a.fdv_usd), vol: v ? pf(v.h24) : null};
 }
 
+function pairLive(x){ return ((x.volume && num(x.volume.h24)) || 0) >= 100; }
+function pairCmp(x, y){
+  var lx = pairLive(x) ? 1 : 0, ly = pairLive(y) ? 1 : 0;
+  if (lx !== ly) return ly - lx;
+  return ((y.liquidity && y.liquidity.usd) || 0) - ((x.liquidity && x.liquidity.usd) || 0);
+}
 function pickBest(pairs, addr){
   var a = addr.toLowerCase();
   var own = pairs.filter(function(p){
     return p.baseToken && String(p.baseToken.address).toLowerCase() === a;
   });
   var list = own.length ? own : pairs;
-  list = list.slice().sort(function(x, y){
-    return ((y.liquidity && y.liquidity.usd) || 0) - ((x.liquidity && x.liquidity.usd) || 0);
-  });
+  list = list.slice().sort(pairCmp);
   return {best:list[0], list:list};
 }
 
@@ -617,7 +621,7 @@ function marketMetrics(p, list, gt, al){
   var mc = num(p.marketCap), fdv = num(p.fdv);
   var vol = list.reduce(function(s2, x){ return s2 + ((x.volume && num(x.volume.h24)) || 0); }, 0);
   var t = p.txns && p.txns.h24;
-  var totalLiq = list.reduce(function(s, x){return s + ((x.liquidity && x.liquidity.usd) || 0);}, 0);
+  var liveP = list.filter(pairLive), totalLiq = (liveP.length ? liveP : list).reduce(function(s, x){return s + ((x.liquidity && x.liquidity.usd) || 0);}, 0);
   if (totalLiq > 0) liq = totalLiq;
   var dexLiq = totalLiq, src = "";
   if (gt) {
@@ -717,7 +721,7 @@ function pairsTable(list){
   var rows = list.slice(0, 5).map(function(p){
     var url = /^https:\/\//.test(p.url || "") ? p.url : "#";
     return "<tr><td><a href=\"" + esc(url) + "\" target=\"_blank\" rel=\"noopener\">" + esc(p.dexId || "par") +
-      " " + esc((p.labels || []).join(" ")) + " / " + esc(p.quoteToken && p.quoteToken.symbol) + "</a></td>" +
+      " " + esc((p.labels || []).join(" ")) + " / " + esc(p.quoteToken && p.quoteToken.symbol) + (pairLive(p) ? "" : " · brez prometa") + "</a></td>" +
       "<td>" + usd(p.liquidity && p.liquidity.usd) + "</td><td>" + usd(p.volume && p.volume.h24) + "</td></tr>";
   }).join("");
   return '<div class="card"><table class="pairs"><thead><tr><th>Par</th><th>Likvidnost</th><th>Promet 24 h</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
@@ -1560,13 +1564,14 @@ async function scanAlpha(){
         var a = String(p.baseToken && p.baseToken.address).toLowerCase();
         var l = (p.liquidity && p.liquidity.usd) || 0;
         var b0 = best[a] || (best[a] = {l: 0, vol: 0, pl: -1, p: null, b1: 0, s1: 0, b5: 0, s5: 0, v1: 0});
-        b0.l += l;
+        var lv = ((p.volume && p.volume.h24) || 0) >= 100; b0.l += l; if (!lv) b0.dl = (b0.dl || 0) + l;
         b0.vol += (p.volume && p.volume.h24) || 0;
         b0.v1 += (p.volume && p.volume.h1) || 0;
         var t1 = p.txns && p.txns.h1, t5 = p.txns && p.txns.m5;
         if (t1) { b0.b1 += t1.buys || 0; b0.s1 += t1.sells || 0; }
         if (t5) { b0.b5 += t5.buys || 0; b0.s5 += t5.sells || 0; }
-        if (l > b0.pl) { b0.pl = l; b0.p = p; }
+        var rl = lv ? l + 1e15 : l;
+        if (rl > b0.pl) { b0.pl = rl; b0.p = p; }
       });
     });
     var old = {};
@@ -1596,6 +1601,7 @@ async function scanAlpha(){
         return;
       }
       var p = b.p, pc = p.priceChange || {};
+      if ((b.dl || 0) > 0 && b.l - b.dl > 0) { b.l -= b.dl; b.dl = 0; }
       var bl = pf(t.liquidity), bv = pf(t.volume24h), b24 = pf(t.percentChange24h);
       var miss = bl > 2 * b.l;
       var px = num(p.priceUsd), v1 = b.v1, m5 = num(pc.m5), h1 = num(pc.h1), h6 = num(pc.h6), stl = 0;
