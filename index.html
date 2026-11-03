@@ -161,6 +161,8 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
     <button data-g="15m" class="on">15 min</button><button data-g="1h">1 ura</button><button data-g="5m">5 min</button>
   </div>
   <div class="card glist" id="gainers"><div class="loading">Nalagam seznam Alpha…</div></div>
+  <h2>Trend · rastoči in padajoči<span class="info" role="button" tabindex="0" data-info="sec_trtop" aria-label="Razlaga">ⓘ</span></h2><p class="note">Futures kovanci iz zadnjega skena: rast in padci v 15 min, 30 min, 1 h in 3 h s cenami. Posodobi se ob vsakem osveževanju futures panela.</p><div class="card" id="trtop" style="overflow-x:auto"></div>
+  <h2>Trend · spot (brez futures)<span class="info" role="button" tabindex="0" data-info="sec_trspot" aria-label="Razlaga">ⓘ</span></h2><p class="note">Alpha žetoni brez futures para: rast in padci v 15 min, 30 min, 1 h in 3 h s cenami. Posodobi se ob osveževanju Alpha seznama.</p><div class="card" id="trspot" style="overflow-x:auto"></div>
   </div><div data-tab="set">
   <h2>Nastavitve in opozorila<span class="info" role="button" tabindex="0" data-info="sec_settings" aria-label="Razlaga">ⓘ</span></h2>
   <p class="note">Opozorila delujejo samo, ko je stran odprta in je vklopljeno samodejno osveževanje. Prag rasti in likvidnost veljata za seznam Alpha, pogoji OI in volumna za futures panel.</p>
@@ -206,8 +208,7 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="row" style="margin-top:8px"><button class="ghost small" id="fscanlist">Seznam vseh Alpha kovancev s futures</button></div>
   <div class="card glist" id="fscanbox" hidden></div>
   <p class="stat">Top 10 kovancev, ki izpolnjujejo pogoje, razvrščeni po rasti volumna. Tapni vrstico za vse podatke. OI je v količini pogodb, ne v dolarjih, zato rast cene ne napihne spremembe. Squeeze = cena raste, OI pada (shorti zapirajo). L/S nad 1 = več longov. Taker nad 1 = več agresivnih nakupov. Funding pod 0 = shorti plačujejo longom.</p>
-  <h2>Trend · rastoči in padajoči<span class="info" role="button" tabindex="0" data-info="sec_trtop" aria-label="Razlaga">ⓘ</span></h2><p class="note">Futures kovanci iz zadnjega skena: rast in padci v 15 min, 30 min, 1 h in 3 h s cenami. Posodobi se ob vsakem osveževanju futures panela.</p><div class="card" id="trtop" style="overflow-x:auto"></div>
-  <h2>Trend · spot (brez futures)<span class="info" role="button" tabindex="0" data-info="sec_trspot" aria-label="Razlaga">ⓘ</span></h2><p class="note">Alpha žetoni brez futures para: rast in padci v 15 min, 30 min, 1 h in 3 h s cenami. Posodobi se ob osveževanju Alpha seznama.</p><div class="card" id="trspot" style="overflow-x:auto"></div>
+  
   
 
   </div><div data-tab="sig">
@@ -2451,10 +2452,10 @@ function renderSigs(){
   var sy = window.scrollY, rec = sigs.filter(function(s){ return s.t > Date.now() - 3 * 3600000; }), rhtml = (rec.length ? rec : sigs.slice(-8)).slice().reverse().map(evRow).join("");
   box.innerHTML =
     '<div class="cap">Skupaj ' + sigWord(sg.length) + ' in ' + al.length + ' opozoril' + (dups ? ' (brez ' + dups + ' dvojnikov)' : '') + (bad.length ? ' (izločeno kot sumljivo, OI nad ' + OI_MAX + ' % ali lažni skok prometa »prej $0«: ' + bad.length + ')' : '') + '. Tapni skupino ali kovanec za podrobnosti. ' + infoBtn('s_read') + '</div>' +
-    '<div class="cap" style="margin-top:8px"><b>Signali</b></div>' + grpHtml(sg, false) +
-    '<div class="cap" style="margin-top:12px"><b>Opozorila</b> (cena, OI, taker, skok prometa) z izidi po 15 min, 30 min, 1 h in 3 h</div>' + grpHtml(al, true) +
+    '<div class="cap" style="margin-top:12px">Zadnji dogodki: ' + (rec.length ? 'vsi iz zadnjih 3 h (' + rec.length + ')' : 'zadnjih 8 (v 3 h ni novih)') + ', z izidi po 15 min, 30 min, 1 h in 3 h</div>' + rhtml +
     '<div class="cap" style="margin-top:12px"><b>Združeno po kovancih</b> (tapni kovanec za seznam)</div>' + coinGroupHtml(sigs) +
-    '<div class="cap" style="margin-top:12px">Zadnji dogodki: ' + (rec.length ? 'vsi iz zadnjih 3 h (' + rec.length + ')' : 'zadnjih 8 (v 3 h ni novih)') + ', z izidi po 15 min, 30 min, 1 h in 3 h</div>' + rhtml;
+    '<div class="cap" style="margin-top:8px"><b>Signali</b></div>' + grpHtml(sg, false) +
+    '<div class="cap" style="margin-top:12px"><b>Opozorila</b> (cena, OI, taker, skok prometa) z izidi po 15 min, 30 min, 1 h in 3 h</div>' + grpHtml(al, true);
   window.scrollTo(0, sy);
   renderCoinEv();
 }
