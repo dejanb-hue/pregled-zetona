@@ -166,6 +166,7 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <p class="note">Opozorila delujejo samo, ko je stran odprta in je vklopljeno samodejno osveževanje. Prag rasti in likvidnost veljata za seznam Alpha, pogoji OI in volumna za futures panel.</p>
   <div class="card settings">
     <label><span>Opozori, ko cena v 5 min zraste nad<span class="info" role="button" tabindex="0" data-info="set_thr" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="thr" min="1" step="1" inputmode="decimal"> %</span></label>
+    <label><span>Opozori, ko cena v 5 min pade pod −<span class="info" role="button" tabindex="0" data-info="set_thrdn" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="thrdn" min="1" step="1" inputmode="decimal"> %</span></label>
     <label><span>Opozori ob skoku open interesta v 5 min nad<span class="info" role="button" tabindex="0" data-info="set_oi" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="oithr" min="0.5" step="0.5" inputmode="decimal"> %</span></label>
     <label><span>Opozori, ko taker promet (5 min) preseže povprečje za<span class="info" role="button" tabindex="0" data-info="set_tk" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="tkthr" min="1.5" step="0.5" inputmode="decimal"> x</span></label>
     <label><span>Nakupni pritisk: nakupi proti prodajam (število, 1 h) vsaj<span class="info" role="button" tabindex="0" data-info="set_bp" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="bpthr" min="1.1" step="0.1" inputmode="decimal"> x</span></label>
@@ -221,7 +222,7 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
     <div class="stat" id="iomsg" style="margin-top:6px"></div>
   </div>
   <p class="stat">Signal se zabeleži, ko kovanec v 15-min ali 1-urnem oknu izpolni oba pogoja (rast volumna in sprememba OI), največ enkrat na uro. Izid je sprememba futures cene po 15 min, 1 h in 3 h. Brez provizij in zdrsa, vzorec je majhen, zato ni dokaz.</p>
-  <p class="stat"><b>Kratice:</b> sq squeeze · nl nove pozicije · ns novi shorti · lq likvidacije · bp nakupni pritisk · ⚑5m cena 5 min (spot) · ⚑OI skok OI · ⚑tk skok takerja · ⚑15m futures cena 15 min · ⚑1h futures cena 1 h · ⚡ skok prometa <span class="info" role="button" tabindex="0" data-info="abbr" aria-label="Razlaga">ⓘ</span></p>
+  <p class="stat"><b>Kratice:</b> sq squeeze · nl nove pozicije · ns novi shorti · lq likvidacije · bp nakupni pritisk · ⚑5m cena 5 min (spot) · ⚑5m↓ padec cene 5 min (spot) · ⚑OI skok OI · ⚑tk skok takerja · ⚑15m futures cena 15 min · ⚑1h futures cena 1 h · ⚡ skok prometa <span class="info" role="button" tabindex="0" data-info="abbr" aria-label="Razlaga">ⓘ</span></p>
 
   <h2>Trend zadnja ura<span class="info" role="button" tabindex="0" data-info="sec_trend" aria-label="Razlaga">ⓘ</span></h2>
   <p class="note">Vsak stolpec je 15-min obdobje do ure v glavi. Podatki so iz posnetkov, ki se shranijo v tej napravi ob osveževanju futures panela (največ enkrat na 5 min na kovanec).</p>
@@ -348,7 +349,7 @@ function esc(s){
   });
 }
 /* ---------- razlage (gumb ⓘ) ---------- */
-var ABBR = "sq squeeze · nl nove pozicije · ns novi shorti · lq likvidacije · bp nakupni pritisk · ⚑5m cena 5 min (spot) · ⚑OI skok OI · ⚑tk skok takerja · ⚑15m futures cena 15 min · ⚑1h futures cena 1 h · ⚡ skok prometa";
+var ABBR = "sq squeeze · nl nove pozicije · ns novi shorti · lq likvidacije · bp nakupni pritisk · ⚑5m cena 5 min (spot) · ⚑5m↓ padec cene 5 min (spot) · ⚑OI skok OI · ⚑tk skok takerja · ⚑15m futures cena 15 min · ⚑1h futures cena 1 h · ⚡ skok prometa";
 var INFO = {
   sec_gainers: ["Največji rastoči · Binance Alpha", "Seznam Alpha žetonov z Binance, cene in spremembe z DEXScreenerja. Razvrščeno po spremembi cene v izbranem obdobju.\nSprememba cene je z glavnega para (največ likvidnosti), likvidnost in promet 24 h sta seštevek vseh parov žetona.\n15 min Binance ne ponuja, zato ga izračunam iz minutnih svečk Binance Alpha, in to samo za do 24 kandidatov z najvišjo rastjo v 5 min in 1 uri. Žeton izven teh kandidatov se v 15-min seznamu ne more pojaviti.\nOranžna likvidnost = pod $50K, izstop je težak. Odstotki: 5 min in 1 h sta priceChange glavnega para z DEXScreenerja. 15 min je izračun iz Binance Alpha minutnih svečk (zaprtje zadnje proti odprtju pred 15 min, drseče okno). Seznam vključuje samo žetone, ki so skozi filter: promet 24 h ≥ $2M in 1 h ≥ $100K (ali skok prometa) ter najmanjša likvidnost iz nastavitev.\nVrstica »Futures« pod žetonom pokaže, ali ima kovanec futures par in kaj se tam dogaja."],
   sec_settings: ["Nastavitve in opozorila", "Nastavitve se shranijo v brskalnik te naprave. Opozorila (rast cene, skok OI, taker promet, novi signali) delujejo samo ob vklopljenem samodejnem osveževanju in odprti strani. Zvok in vibracija se sprožita ob vsakem opozorilu, isti kovanec se ne javi znova 15 minut."],
@@ -363,9 +364,11 @@ var INFO = {
   sec_flow: ["Promet po vrsti trgovcev", "Zadnjih ~300 trgovanj glavnega para (GeckoTerminal), razvrščenih po denarnici, ki je trgovanje sprožila.\nBot: veliko trgovanj, enake velikosti, hiter ritem ali nakup in prodaja v istem bloku. Kit: trgovanje nad večjim od $2K in 1 % likvidnosti (če ni bot). Normalen: ostali.\nTo je ocena po pravilih, ne dokaz. Lovci na Alpha točke so pogosto videti kot boti."],
   sec_holders: ["Top imetniki", "Top 10 imetnikov po GoPlusu, deleži so od skupne ponudbe. Oznaka (npr. borza, bazen) je iz GoPlusa, če obstaja. Povezava odpre transfere denarnice za ta žeton na explorerju.\nStolpec Trgovanja se izpolni samo, če je imetnik sam trgoval prek glavnega bazena v zadnjih ~300 trgovanjih."],
 
+  set_thrdn: ["Opozorilo ob padcu cene", "Ko cena Alpha žetona (DEXScreener, glavni par) v 5 min pade za več kot ta prag in ima žeton vsaj izbrano likvidnost, se sproži opozorilo ⚑5m↓ (zvok, vibracija, oznaka). Isti žeton se ne javi znova 15 min. Ob opozorilih za ceno in skok prometa stran samodejno zajame trgovanja (glej Trgovci ob dogodku)."],
+  evt_tr: ["Trgovci ob dogodku", "Ob opozorilu za ceno (⚑5m, ⚑5m↓, ⚑15m, ⚑1h, ⚡) stran zajame zadnja trgovanja glavnega bazena (GeckoTerminal, do ~300 na zahtevek) in jih po 2,5 min še enkrat. Žetoni v gibanju ali z opozorilom se zajemajo vsako minuto, zato je okno pogosto daljše od 300 trgovanj. Povzetek: okno, število trgovanj, promet, deleži normalnih trgovcev, kitov in botov, neto, največji prodajalci in kupci (polni naslovi so v izvozu), največji preskok cene in najbolj prometna minuta.\nOmejitve: žeton, ki ni bil med spremljanimi, ima samo zadnjih ~300 trgovanj, kar pri hitrem padcu lahko zajame samo konec. Zajem deluje samo ob odprti strani. Razvrstitev je ocena po pravilih."],
   sec_trspot: ["Trend · spot (brez futures)", "Alpha žetoni, ki nimajo futures para in so skozi filter prometa in likvidnosti. Cene so iz minutnih svečk Binance Alpha (rezerva: 5-minutne svečke GeckoTerminala). V celici je sprememba, pod njo cena na začetku obdobja. Če svečke ne segajo dovolj nazaj, je celica »–«.\nPregleda se do 24 kandidatov z največjo rastjo ali padcem v 5 min, 1 h in 6 h (DEXScreener), zato žeton izven teh ni v tabeli.\nVrstica pod žetonom: nakupi proti prodajam v 1 h (število), promet 1 h (⚡ = skok prometa), likvidnost in sprememba 5 min. To so skromnejši podatki kot pri futures, razlaga ni dokaz vzroka."],
   sec_trtop: ["Trend · rastoči in padajoči", "Futures kovanci iz zadnjega skena (promet 1 h nad $300K), razvrščeni po največji rasti oz. padcu v 15 min, 30 min, 1 h ali 3 h. V celici je sprememba, pod njo cena na začetku obdobja. Cena zdaj je v stolpcu Zdaj.\nVrstica pod kovancem je možen vzrok: stanje iz cene in OI (squeeze, nove pozicije, novi shorti, likvidacije), rast prometa, taker (pod 1 = prevladujejo agresivne prodaje), L/S in funding. Pri padcih: likvidacije = longi zapirajo ali so likvidirani, novi shorti = pritisk novih shortov.\nTo je razlaga iz podatkov, ne dokaz vzroka. Samo kovanci s futures parom."],
-  abbr: ["Kratice signalov in opozoril", "Signali (iz gibanja cene in OI):\nsq = squeeze: cena gor, OI dol (shorti zapirajo pozicije)\nnl = nove pozicije: cena gor, OI gor\nns = novi shorti: cena dol, OI gor\nlq = likvidacije: cena dol, OI dol\nbp = nakupni pritisk (spot): nakupi proti prodajam po številu in v USD\nOpozorila:\n⚑5m = spot cena v 5 min nad pragom\n⚑OI = skok open interesta v 5 min\n⚑tk = skok taker prometa proti povprečju\n⚑15m = futures cena v 15 min (±)\n⚑1h = futures cena v 1 h (±)\n⚡ = skok spot prometa v 1 h"],
+  abbr: ["Kratice signalov in opozoril", "Signali (iz gibanja cene in OI):\nsq = squeeze: cena gor, OI dol (shorti zapirajo pozicije)\nnl = nove pozicije: cena gor, OI gor\nns = novi shorti: cena dol, OI gor\nlq = likvidacije: cena dol, OI dol\nbp = nakupni pritisk (spot): nakupi proti prodajam po številu in v USD\nOpozorila:\n⚑5m = spot cena v 5 min nad pragom\n⚑5m↓ = spot cena v 5 min pod pragom (hiter padec)\n⚑OI = skok open interesta v 5 min\n⚑tk = skok taker prometa proti povprečju\n⚑15m = futures cena v 15 min (±)\n⚑1h = futures cena v 1 h (±)\n⚡ = skok spot prometa v 1 h"],
   sec_sum: ["Povzetek", "Izbor iz razdelkov Trg, Varnost in Promet po trgovcih: prikažejo se samo rumeni in rdeči kazalniki, zeleni so le prešteti. Vrstica Futures kaže stanje v 1 h iz Binance Futures (cena, OI, rast volumna, funding, L/S, taker). To je samo povzetek, ne napoved cene."],
   sec_coinev: ["Signali in opozorila kovanca", "Vsi zabeleženi signali in opozorila za ta kovanec (shranjeni v tej napravi). Izid = sprememba cene po 15 min, 30 min, 1 h in 3 h od trenutka dogodka. »…« = izid še ni znan, »–« = ni podatka. Izidi se dopolnijo naknadno iz Binance minutnih svečk (futures) ali GeckoTerminala (spot), tudi če je bila stran vmes zaprta.\n" + ABBR],
   sec_win: ["Časovno okno trgovanj", "Zbrana trgovanja (GeckoTerminal, do 24 h, shranjena v brskalniku) lahko segajo daleč nazaj. Trak Od/Do ali čas v polju (npr. 04:25-06:15) zoži okno. Velja za razdelka Promet po vrsti trgovcev in Top imetniki ter za kopiranje podatkov. Opozorilo ⚠ pomeni, da zbirka ne pokriva izbranega časa."],
@@ -1490,12 +1493,13 @@ var DX_CHAIN = {"56":"bsc","1":"ethereum","8453":"base","42161":"arbitrum","137"
 var gBusyAt = 0, fBusyAt = 0, lastAlphaAt = 0, lastFutAt = 0, wd = null;
 var alphaTokens = null, alphaAt = 0, gRows = [], gTab = "15m", gBusy = false, k15Busy = false, gTimer = null;
 var alerted = {}, alertLog = [], audioCtx = null, wakeLock = null, k15Fail = false;
-var settings = {auto: false, autoFill: true, thr: 10, minLiq: 10000, oiThr: 3, tkThr: 3, volX: 2, oiMin: 2, bpThr: 1.8, usdThr: 1.3, minTx: 100, ntfy: "", px15: 8, px1h: 10, min24: 2000000, min1h: 100000, leadVol: 2000000, cond: "both", tf: {amt: 100, stop: 5, tgt: 10, fee: 0.25}};
+var settings = {auto: false, autoFill: true, thr: 10, thrDn: 7, minLiq: 10000, oiThr: 3, tkThr: 3, volX: 2, oiMin: 2, bpThr: 1.8, usdThr: 1.3, minTx: 100, ntfy: "", px15: 8, px1h: 10, min24: 2000000, min1h: 100000, leadVol: 2000000, cond: "both", tf: {amt: 100, stop: 5, tgt: 10, fee: 0.25}};
 
 function loadSettings(){
   try {
     var o = JSON.parse(localStorage.getItem("ct_set") || "{}");
     if (num(o.thr) != null && o.thr > 0) settings.thr = num(o.thr);
+    if (num(o.thrDn) != null && o.thrDn > 0) settings.thrDn = num(o.thrDn);
     if (num(o.minLiq) != null) settings.minLiq = num(o.minLiq);
     if (num(o.oiThr) != null && o.oiThr > 0) settings.oiThr = num(o.oiThr);
     if (num(o.tkThr) != null && o.tkThr > 0) settings.tkThr = num(o.tkThr);
@@ -1630,12 +1634,12 @@ async function scanAlpha(){
     logSpot();
     checkJumps(rows);
     H.alphaMs = Date.now() - t00; healthSet("alphasrc", []); checkAlphaHealth(); fixMissBg();
-    checkAlerts();
+    checkAlerts(); checkDownAlerts();
     renderGainers();
     buySignals();
     setStatus(rows.length + " žetonov · " + new Date().toLocaleTimeString("sl-SI"));
     if (gTab === "15m") compute15();
-    spotTrend();
+    spotTrend(); hotPoll();
   } catch (e) {
     var net = (e instanceof TypeError);
     healthSet("alphasrc", [{k: "sken", sym: "Alpha", msg: String(e && e.message || e)}]);
@@ -1797,7 +1801,7 @@ function renderGainers(){
 /* ---------- Binance Futures ---------- */
 var FAPI = "https://fapi.binance.com"; var fBackoff = 0;
 var TFL = {"5m": "5 min", "15m": "15 min", "1h": "1 ura", "3h": "3 ure", "6h": "6 ur"};
-var STATE_NAMES = {squeeze: "squeeze", newlong: "nove pozicije ↑", newshort: "novi shorti", liq: "likvidacije", flat: "brez signala", buyp: "nakupni pritisk", a_px: "opozorilo: cena 5 min (spot)", a_oi: "opozorilo: skok OI", a_tk: "opozorilo: taker skok", a_px15: "opozorilo: futures cena 15 min", a_px1h: "opozorilo: futures cena 1 h", a_jump: "opozorilo: skok prometa ⚡"};
+var STATE_NAMES = {squeeze: "squeeze", newlong: "nove pozicije ↑", newshort: "novi shorti", liq: "likvidacije", flat: "brez signala", buyp: "nakupni pritisk", a_px: "opozorilo: cena 5 min (spot)", a_pxd: "opozorilo: padec cene 5 min (spot)", a_oi: "opozorilo: skok OI", a_tk: "opozorilo: taker skok", a_px15: "opozorilo: futures cena 15 min", a_px1h: "opozorilo: futures cena 1 h", a_jump: "opozorilo: skok prometa ⚡"};
 var HORIZ = [{k: "15m", m: 15}, {k: "30m", m: 30}, {k: "1h", m: 60}, {k: "3h", m: 180}];
 var futOpen = {}, fTimer = null, futScope = "alpha", futPer = "15m", futBusy = false, futPending = false;
 var futInfo = null, futInfoAt = 0, tickCache = null, tickAt = 0, premCache = null, premAt = 0;
@@ -2314,7 +2318,7 @@ function announceSignals(list){
   renderAlerts();
   pingAlert(list[0].label + " signal " + TFL[list[0].per], STATE_NAMES[list[0].st]);
 }
-var EVSHORT = {squeeze: "sq", newlong: "nl", newshort: "ns", liq: "lq", buyp: "bp", a_px: "⚑5m", a_oi: "⚑OI", a_tk: "⚑tk", a_px15: "⚑15m", a_px1h: "⚑1h", a_jump: "⚡"};
+var EVSHORT = {squeeze: "sq", newlong: "nl", newshort: "ns", liq: "lq", buyp: "bp", a_px: "⚑5m", a_pxd: "⚑5m↓", a_oi: "⚑OI", a_tk: "⚑tk", a_px15: "⚑15m", a_px1h: "⚑1h", a_jump: "⚡"};
 function isAl(s){ return !!(s && typeof s.st === "string" && s.st.indexOf("a_") === 0); }
 function evTxtH(h, evs){ return (evs || []).filter(function(e){ return Math.floor(e.t / HMS) === h; }).map(function(e){ return EVSHORT[e.st] || e.st; }).join(", "); }
 function evTxt(k, evs){ return (evs || []).filter(function(e){ return Math.floor(e.t / H6MS) === k; }).map(function(e){ return EVSHORT[e.st] || e.st; }).join(", "); }
@@ -2324,7 +2328,7 @@ function logAlert(kind, per, c, p0, text, spotRow){
   var sigs = loadSigs(), now = Date.now();
   var e = {id: c.sym + "_" + kind + "_" + now, sym: c.sym, label: c.label, addr: c.addr, t: now, per: per, p0: p0, st: kind, oc: null, pc: null, vx: null, fund: null, msg: text, o: {"15m": null, "30m": null, "1h": null, "3h": null}};
   if (spotRow) { e.src = "gt"; e.chain = spotRow.chain; e.pool = spotRow.pool; }
-  sigs.push(e); saveSigs(sigs);
+  sigs.push(e); saveSigs(sigs); evtCapture(e);
   renderSigs();
 }
 function jumpCalc(o, v1){
@@ -2389,7 +2393,7 @@ function sigDetail(s, brief, nb){
       ? '<small>Ob signalu (' + esc(when) + '): cena ' + esc(price(s.p0)) + ' · nakupi/prodaje (število, 1 h) ' + esc(fr(s.br)) + 'x · v USD ' + esc(fr(s.dr)) + 'x · neto brez botov ' + esc(usdS(s.nb)) + ' · neto boti ' + esc(usdS(s.bn)) + ' · cena 1 h ' + esc(sgn(s.pc)) + '</small>'
       : '<small>Ob signalu (' + esc(when) + '): futures cena ' + esc(price(s.p0)) + ' · volumen ' + esc(fr(s.vx)) + 'x · OI ' + esc(sgn(s.oc)) +
         ' · cena ' + esc(sgn(s.pc)) + ' · funding ' + esc(fr3(fund)) + ' %</small>') +
-    (s.warn ? '<small class="thin">⚠ Pozno: ' + esc(s.warn) + '</small>' : '') +
+    evtHtml(s) + (s.warn ? '<small class="thin">⚠ Pozno: ' + esc(s.warn) + '</small>' : '') +
     (s.addr && !nb ? '<div style="padding:6px 0 2px"><button class="ghost small fopen" data-addr="' + esc(s.addr) + '">Odpri v pregledu</button></div>' : '') +
     '</div>';
 }
@@ -3249,7 +3253,7 @@ function otherText(){
     s += [x.label, x.per, x.st, new Date(x.t).toLocaleString("sl-SI"), price(x.p0), fr(x.vx) + "x", sgn(x.oc), sgn(x.pc), x.fund == null ? "–" : fr3(x.fund * 100) + " %",
       ["15m", "30m", "1h", "3h"].map(function(k){ var v = x.o && x.o[k]; return typeof v === "number" ? sgn(v) : "…"; }).join("/"), x.msg || ""].join(" | ") + "\n";
   });
-  s += evCoinText() + "\n--- Opozorila ---\n" + alertLog.map(function(a){ return a.time + " " + a.sym + " " + a.rest; }).join("\n");
+  s += evtText() + evCoinText() + "\n--- Opozorila ---\n" + alertLog.map(function(a){ return a.time + " " + a.sym + " " + a.rest; }).join("\n");
   s += "\n\n--- Moj seznam ---\n" + loadWatch().map(function(w){ return (w.sym || "") + " " + w.addr; }).join("\n");
   s += "\n\n--- Nastavitve ---\n" + JSON.stringify(settings) + "\n";
   return s;
@@ -3275,10 +3279,11 @@ $("volx").value = settings.volX;
 $("oimin").value = settings.oiMin;
 $("leadvol").value = settings.leadVol / 1e6;
 $("ntfy").value = settings.ntfy;
-$("px15").value = settings.px15;
+$("px15").value = settings.px15; $("thrdn").value = settings.thrDn;
 $("px1h").value = settings.px1h;
 $("px1h").addEventListener("change", function(){ var v = num(this.value.replace(",", ".")); settings.px1h = (v && v > 0) ? v : 10; this.value = settings.px1h; saveSettings(); });
 $("px15").addEventListener("change", function(){ var v = num(this.value.replace(",", ".")); settings.px15 = (v && v > 0) ? v : 8; this.value = settings.px15; saveSettings(); });
+$("thrdn").addEventListener("change", function(){ var v = num(this.value.replace(",", ".")); settings.thrDn = (v && v > 0) ? v : 7; this.value = settings.thrDn; saveSettings(); });
 $("ntfy").addEventListener("change", function(){ settings.ntfy = this.value.trim(); saveSettings(); });
 $("leadvol").addEventListener("change", function(){ var v = num(this.value.replace(",", ".")); settings.leadVol = (v && v > 0) ? v * 1e6 : 2e6; this.value = settings.leadVol / 1e6; saveSettings(); });
 function histBlock(sym, H){
@@ -3898,6 +3903,116 @@ function renderSpotTrend(){
       '<div class="cap">Vir: svečke Binance Alpha (rezerva GeckoTerminal). Pregledanih do 24 kandidatov po rasti in padcu v 5 min, 1 h in 6 h. Posodobljeno ' + esc(new Date(spotTrAt).toLocaleTimeString("sl-SI")) + '. Spot nima OI in takerja, zato je vzrok skromnejši.</div>';
   }
   ["trspot", "trspot2"].forEach(function(id){ var e = $(id); if (e) e.innerHTML = h; });
+}
+var hot = {}, hotWatch = {}, hotBusy = false, hotAt = 0, EVT_KEY = "ct_evt", evtMem = null, evtLast = {};
+function evtLoad(){ if (!evtMem) { try { evtMem = JSON.parse(localStorage.getItem(EVT_KEY) || "{}"); } catch (e) { evtMem = {}; } } return evtMem; }
+function evtSave(){
+  var o = evtLoad(), ks = Object.keys(o).sort(function(a, b){ return (o[a].at || 0) - (o[b].at || 0); });
+  while (ks.length > 120) delete o[ks.shift()];
+  try { localStorage.setItem(EVT_KEY, JSON.stringify(o)); }
+  catch (e) { ks.slice(0, 60).forEach(function(k){ delete o[k]; }); try { localStorage.setItem(EVT_KEY, JSON.stringify(o)); } catch (e2) {} }
+}
+function checkDownAlerts(){
+  if (!$("auto").checked) return;
+  var now = Date.now();
+  var hits = visibleRows().filter(function(r){
+    var k = "dn:" + r.addr.toLowerCase();
+    return !r.miss && r.m5 != null && r.m5 <= -settings.thrDn && (!alerted[k] || now - alerted[k] > 900000);
+  }).sort(function(a, b){ return a.m5 - b.m5; });
+  if (!hits.length) return;
+  hits.forEach(function(r){
+    alerted["dn:" + r.addr.toLowerCase()] = now;
+    logAlert("a_pxd", "5m", {label: r.sym, sym: r.sym, addr: r.addr}, r.price, "padec " + sgn(r.m5) + " v 5 min · likv. " + usd(r.liq) + (bsr(r) != null ? " · nak/prod 1 h " + fr(bsr(r)) + "x" : ""), r);
+  });
+  alertLog = alertLog.slice(0, 10);
+  renderAlerts();
+  pingAlert(hits[0].sym + " padec " + sgn(hits[0].m5) + " v 5 min", "Likvidnost " + usd(hits[0].liq));
+}
+async function hotFetch(r){
+  var tr = await fetchTrades(r.chain, r.pool, r.addr, 1), k = r.addr.toLowerCase();
+  var h = hot[k] || (hot[k] = {ids: {}, a: [], sym: r.sym, chain: r.chain, pool: r.pool, liq: r.liq, last: 0});
+  tr.forEach(function(x){
+    var key = x.w + "|" + x.blk + "|" + x.t + "|" + x.kind + "|" + x.vol;
+    if (!h.ids[key]) { h.ids[key] = 1; h.a.push(x); }
+  });
+  if (h.a.length > 2500) {
+    var cut = Date.now() - 5400000;
+    h.a = h.a.filter(function(x){ return x.t >= cut; }).sort(function(p, q){ return p.t - q.t; }).slice(-2500);
+    h.ids = {}; h.a.forEach(function(x){ h.ids[x.w + "|" + x.blk + "|" + x.t + "|" + x.kind + "|" + x.vol] = 1; });
+  }
+  h.last = Date.now(); h.liq = r.liq; h.sym = r.sym; h.chain = r.chain; h.pool = r.pool;
+}
+async function hotPoll(){
+  if (hotBusy || Date.now() - hotAt < 55000 || !gRows.length || !$("auto").checked || document.visibilityState !== "visible") return;
+  hotBusy = true; hotAt = Date.now();
+  try {
+    var now = Date.now(), seen = {}, list = [];
+    var add = function(r){ var k = r.addr.toLowerCase(); if (seen[k] || list.length >= 8 || !r.pool || !CHAINS[r.chain] || (r.miss && !r.fixed)) return; seen[k] = 1; list.push(r); };
+    gRows.forEach(function(r){ var u = hotWatch[r.addr.toLowerCase()]; if (u && u > now) add(r); });
+    var vis = visibleRows();
+    vis.filter(function(r){ return r.jump || (r.m5 != null && Math.abs(r.m5) >= 3); }).sort(function(a, b){ return Math.abs(b.m5 || 0) - Math.abs(a.m5 || 0); }).forEach(add);
+    vis.slice().sort(function(a, b){ return b.v1 - a.v1; }).forEach(add);
+    for (var i = 0; i < list.length; i++) { try { await hotFetch(list[i]); } catch (e1) {} }
+    Object.keys(hot).forEach(function(k){ if (now - hot[k].last > 7200000) delete hot[k]; });
+  } catch (e0) {}
+  hotBusy = false;
+}
+function hotSummary(k, t0, t1){
+  var h = hot[k];
+  if (!h) return null;
+  var tw = h.a.filter(function(x){ return x.t >= t0 && x.t <= t1; });
+  if (tw.length < 5) return null;
+  var an = analyzeTrades(tw, h.liq || 0), c = an.cls, tot = an.total;
+  var pc = function(q){ return tot ? Math.round(c[q].vol / tot * 100) : 0; };
+  var top = function(key){ return an.wl.slice().filter(function(w){ return w[key] > 0; }).sort(function(a, b){ return b[key] - a[key]; }).slice(0, 3).map(function(w){ return [w.addr, w.cls, Math.round(w[key]), w.n]; }); };
+  var big = tw.slice().sort(function(a, b){ return b.vol - a.vol; })[0], j = an.jumps[0], bk = {};
+  tw.forEach(function(x){ var m = Math.floor(x.t / 60000), b = bk[m] || (bk[m] = {b: 0, s: 0}); if (x.kind === "buy") b.b += x.vol; else b.s += x.vol; });
+  var pm = Object.keys(bk).map(Number).sort(function(a, b){ return (bk[b].b + bk[b].s) - (bk[a].b + bk[a].s); })[0];
+  return {at: Date.now(), t0: an.t0, t1: an.t1, n: an.n, tot: Math.round(tot), pn: pc("normal"), pw: pc("whale"), pb: pc("bot"),
+    nn: Math.round(c.normal.buy + c.whale.buy - c.normal.sell - c.whale.sell), nb: Math.round(c.bot.buy - c.bot.sell),
+    sell: top("sell"), buy: top("buy"), big: big ? [big.kind, Math.round(big.vol), big.w, big.t] : null,
+    jump: j ? [Math.round(j.d * 10) / 10, j.t.kind, Math.round(j.t.vol), j.t.w, j.t.t] : null,
+    pk: pm != null ? [pm * 60000, Math.round(bk[pm].b), Math.round(bk[pm].s)] : null};
+}
+function evtCapture(e){
+  if (!e || !e.addr || !/^a_(px|px15|px1h|pxd|jump)$/.test(e.st)) return;
+  var a = String(e.addr).toLowerCase(), r = gRows.filter(function(x){ return x.addr.toLowerCase() === a; })[0];
+  if (!r || !r.pool || !CHAINS[r.chain]) return;
+  hotWatch[a] = Date.now() + 1800000;
+  var prev = evtLast[a];
+  if (prev && Date.now() - prev.t < 180000) { prev.ids.push(e.id); return; }
+  var cap = {t: Date.now(), ids: [e.id]};
+  evtLast[a] = cap;
+  var run = async function(){
+    try { await hotFetch(r); } catch (x) {}
+    var sm = hotSummary(a, cap.t - 600000, Date.now());
+    if (!sm) return;
+    var E = evtLoad();
+    cap.ids.forEach(function(id){ E[id] = sm; });
+    evtSave(); renderSigs();
+  };
+  run(); setTimeout(run, 150000);
+}
+function evtHtml(s){
+  var E = evtLoad()[s.id];
+  if (!E) return "";
+  var sh = function(arr){ return arr.map(function(w){ return shortA(w[0]) + " " + usd(w[2]) + " (" + w[1] + ", " + w[3] + " tr.)"; }).join(", "); };
+  return '<small>Trgovci ob dogodku' + infoBtn('evt_tr') + ' (' + esc(hhmm(E.t0) + "–" + hhmm(E.t1)) + ', ' + E.n + ' tr., ' + esc(usd(E.tot)) + '): normalni ' + E.pn + ' % · kiti ' + E.pw + ' % · boti ' + E.pb + ' % · neto brez botov ' + esc(usdS(E.nn)) + ' · boti ' + esc(usdS(E.nb)) + '</small>' +
+    (E.sell && E.sell.length ? '<small>Največ prodali: ' + esc(sh(E.sell)) + '</small>' : '') +
+    (E.buy && E.buy.length ? '<small>Največ kupili: ' + esc(sh(E.buy)) + '</small>' : '') +
+    (E.jump ? '<small>Največji preskok cene ' + esc(sgn(E.jump[0])) + ' (' + (E.jump[1] === "buy" ? "nakup " : "prodaja ") + esc(usd(E.jump[2])) + ', ' + esc(shortA(E.jump[3])) + ', ' + esc(hhmm(E.jump[4])) + ')</small>' : '') +
+    (E.pk ? '<small>Najbolj prometna minuta ' + esc(hhmm(E.pk[0])) + ': nakupi ' + esc(usd(E.pk[1])) + ' / prodaje ' + esc(usd(E.pk[2])) + '</small>' : '');
+}
+function evtText(){
+  var E = evtLoad(), t = "\n--- Trgovci ob dogodkih (ura | kovanec | vrsta | okno | tr. | promet | norm/kiti/boti % | neto brez botov | boti neto | top prodajalci | top kupci | največji preskok) ---\n", n = 0;
+  loadSigs().slice().reverse().forEach(function(x){
+    var q = E[x.id];
+    if (!q || n >= 25) return;
+    n++;
+    var sh = function(arr){ return (arr || []).map(function(w){ return w[0] + " " + usd(w[2]) + " " + w[1]; }).join("; "); };
+    t += [new Date(x.t).toLocaleString("sl-SI"), x.label, x.st, hhmm(q.t0) + "-" + hhmm(q.t1), q.n, usd(q.tot), q.pn + "/" + q.pw + "/" + q.pb, usdS(q.nn), usdS(q.nb), sh(q.sell), sh(q.buy), q.jump ? sgn(q.jump[0]) + " " + q.jump[1] + " " + usd(q.jump[2]) + " " + q.jump[3] : "–"].join(" | ") + "\n";
+  });
+  return t;
 }
 function showTab(t){
   document.body.setAttribute("data-t", t);
