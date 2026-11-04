@@ -251,6 +251,11 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div id="dwinbox"></div>
   <div class="row" style="align-items:center;justify-content:space-between;margin:8px 0"><button class="ghost small" id="dtrref">Osveži</button><span class="stat">Neto = nakupi minus prodaje brez botov</span></div>
   <div id="dtrbox"></div>
+  <h2>Skeni in filtri<span class="info" role="button" tabindex="0" data-info="sec_scan" aria-label="Razlaga">ⓘ</span></h2>
+  <p class="note">Kaj je bilo ob zadnjem skenu pregledano in kaj je šlo čez filter (seznami, razlogi izločitve). Zgodovina skenov se hrani 24 h.</p>
+  <div class="card" id="scsum"></div>
+  <div class="card" id="sclists" style="padding:4px 10px;margin-top:8px"></div>
+  <div class="card" id="schist" style="overflow-x:auto;margin-top:8px"></div>
   <h2>Zdravje podatkov<span class="info" role="button" tabindex="0" data-info="sec_health" aria-label="Razlaga">ⓘ</span></h2>
   <p class="note">Kontrolni seznam: ali so viri in kovanci popolni. Težave se beležijo, stran jih skuša sama rešiti (ponovni poskus, drug vir).</p>
   <div class="card" id="hlcheck"></div>
@@ -341,7 +346,7 @@ function fetch(url, opt){
   });
 }
 var WIN = {f: {rel: null, from: null, to: null}, d: {rel: null, from: null, to: null}}, WSPAN = {f: null, d: null}, wDragging = "", wTimer = {}, flowData = null, lastSpan = null, lastAllN = 0, bufMeta = {};
-var lastAddr = ""; var lastAn = null, lastTr = [], lastCov = null, lastFutOk = [];
+var lastAddr = "", lastRunAt = 0; var lastAn = null, lastTr = [], lastCov = null, lastFutOk = [];
 var runCounter = 0, curPair = null, curChain = "", candleCache = {};
 
 function esc(s){
@@ -367,6 +372,7 @@ var INFO = {
 
   set_thrdn: ["Opozorilo ob padcu cene", "Ko cena Alpha žetona (DEXScreener, glavni par) v 5 min pade za več kot ta prag in ima žeton vsaj izbrano likvidnost, se sproži opozorilo ⚑5m↓ (zvok, vibracija, oznaka). Isti žeton se ne javi znova 15 min. Ob opozorilih za ceno in skok prometa stran samodejno zajame trgovanja (glej Trgovci ob dogodku)."],
   evt_tr: ["Trgovci ob dogodku", "Ob opozorilu za ceno (⚑5m, ⚑5m↓, ⚑15m, ⚑1h, ⚡) stran zajame zadnja trgovanja glavnega bazena (GeckoTerminal, do ~300 na zahtevek) in jih po 2,5 min še enkrat. Žetoni v gibanju ali z opozorilom se zajemajo vsako minuto, zato je okno pogosto daljše od 300 trgovanj. Povzetek: okno, število trgovanj, promet, deleži normalnih trgovcev, kitov in botov, neto, največji prodajalci in kupci (polni naslovi so v izvozu), največji preskok cene in najbolj prometna minuta.\nOmejitve: žeton, ki ni bil med spremljanimi, ima samo zadnjih ~300 trgovanj, kar pri hitrem padcu lahko zajame samo konec. Zajem deluje samo ob odprti strani. Razvrstitev je ocena po pravilih."],
+  sec_scan: ["Skeni in filtri", "Alpha seznam: vsi žetoni z Binance, brez označenih offline. DEXScreener jih poizve v paketih po 30. Filtri: 1) promet 24 h ≥ prag, 2) promet 1 h ≥ prag (ali skok prometa ⚡), 3) likvidnost ≥ nastavitev. Čez vse tri gre seznam, ki ga uporabljajo trend, opozorila in dnevnik.\nFutures: Alpha žetoni s futures parom (po simbolu in ceni), ki so čez spot filter ali imajo futures promet 24 h nad $50M, razvrščeni po futures prometu 24 h, pregleda se največ 60. »Pregledan« = imamo OI in svečke.\nSeznami kažejo, zakaj je bil žeton izločen. Isti podatki so v gumbih za kopiranje. Zgodovina: po en zapis na 5 min (tok = žetonov v Alpha seznamu, DEX = z DEX podatki)."],
   sec_trspot: ["Trend · spot (brez futures)", "Alpha žetoni, ki nimajo futures para in so skozi filter prometa in likvidnosti. Cene so iz minutnih svečk Binance Alpha (rezerva: 5-minutne svečke GeckoTerminala). V celici je sprememba, pod njo cena na začetku obdobja. Če svečke ne segajo dovolj nazaj, je celica »–«.\nPregleda se do 24 kandidatov z največjo rastjo ali padcem v 5 min, 1 h in 6 h (DEXScreener), zato žeton izven teh ni v tabeli.\nVrstica pod žetonom: nakupi proti prodajam v 1 h (število), promet 1 h (⚡ = skok prometa), likvidnost in sprememba 5 min. To so skromnejši podatki kot pri futures, razlaga ni dokaz vzroka."],
   sec_trtop: ["Trend · rastoči in padajoči", "Futures kovanci iz zadnjega skena (promet 1 h nad $300K), razvrščeni po največji rasti oz. padcu v 15 min, 30 min, 1 h ali 3 h. V celici je sprememba, pod njo cena na začetku obdobja. Cena zdaj je v stolpcu Zdaj.\nVrstica pod kovancem je možen vzrok: stanje iz cene in OI (squeeze, nove pozicije, novi shorti, likvidacije), rast prometa, taker (pod 1 = prevladujejo agresivne prodaje), L/S in funding. Pri padcih: likvidacije = longi zapirajo ali so likvidirani, novi shorti = pritisk novih shortov.\nTo je razlaga iz podatkov, ne dokaz vzroka. Samo kovanci s futures parom."],
   abbr: ["Kratice signalov in opozoril", "Signali (iz gibanja cene in OI):\nsq = squeeze: cena gor, OI dol (shorti zapirajo pozicije)\nnl = nove pozicije: cena gor, OI gor\nns = novi shorti: cena dol, OI gor\nlq = likvidacije: cena dol, OI dol\nbp = nakupni pritisk (spot): nakupi proti prodajam po številu in v USD\nOpozorila:\n⚑5m = spot cena v 5 min nad pragom\n⚑5m↓ = spot cena v 5 min pod pragom (hiter padec)\n⚑OI = skok open interesta v 5 min\n⚑tk = skok taker prometa proti povprečju\n⚑15m = futures cena v 15 min (±)\n⚑1h = futures cena v 1 h (±)\n⚡ = skok spot prometa v 1 h"],
@@ -1282,7 +1288,7 @@ async function run(){
     '<h2>Pari' + infoBtn('sec_pairs') + '</h2>' + note('Vsi DEX bazeni tega žetona (DEXScreener), največja likvidnost prva.') + pairsTable(list) +
     '<div id="deep"></div><h2>Povezave' + infoBtn('sec_links') + '</h2>' + note('Hitre povezave na zunanje strani za ta naslov.') + linkSet(addr, chainKey, p);
 
-  curPair = p; curChain = chainKey;
+  curPair = p; curChain = chainKey; lastRunAt = Date.now();
   winSync("f");
   var tl0 = list.reduce(function(a, x){ return a + ((x.liquidity && x.liquidity.usd) || 0); }, 0), ol0 = Math.max((gtd && gtd.liq) || 0, (alp && alp.liq) || 0);
   curTF = {price: num(p.priceUsd), liq: ol0 > 2 * tl0 ? ol0 : ((p.liquidity && num(p.liquidity.usd)) || 0), sym: sym};
@@ -1387,7 +1393,7 @@ async function load6h(my){
   if (!box || !curPair || !curTF) return;
   var spot = candleCache["5m"] || null, fut = null, err = [];
   if (!spot) { try { spot = await fetchCandles(curChain, curPair.pairAddress, "5m"); } catch (e) { err.push("spot: " + e.message); } }
-  try { fut = await fetch6h(curTF.sym, curTF.price); } catch (e2) { err.push("futures: " + e2.message); }
+  try { fut = await fetch6h(curTF.sym, livePx()); } catch (e2) { err.push("futures: " + e2.message); }
   if (my !== runCounter) return;
   var h = (spot || fut) ? build6h(spot, fut, Date.now(), eventsFor(curTF.sym, lastAddr)) : "";
   box.innerHTML = h ? (h + (err.length ? '<div class="cap">Opozorilo: ' + esc(err.join(" · ")) + '</div>' : '')) : '<div class="msg err" style="margin:6px">' + esc(err.join(" · ") || "Ni podatkov.") + '</div>';
@@ -1634,7 +1640,7 @@ async function scanAlpha(){
     gRows = rows;
     logSpot();
     checkJumps(rows);
-    H.alphaMs = Date.now() - t00; healthSet("alphasrc", []); checkAlphaHealth(); fixMissBg();
+    H.alphaMs = Date.now() - t00; healthSet("alphasrc", []); checkAlphaHealth(); fixMissBg(); scanAlphaStats(toks, best);
     checkAlerts(); checkDownAlerts();
     renderGainers();
     buySignals();
@@ -2470,7 +2476,7 @@ async function scanFut(){
     var info = await getFutInfo(), ticks = await getTicks();
     var prem = {};
     try { prem = await getPremium(); } catch (e0) {}
-    var cands = [], seen = {};
+    var cands = [], seen = {}; scTmp = {};
     if (futScope === "alpha") {
       if (!gRows.length) await scanAlpha();
       gRows.forEach(function(r){
@@ -2481,7 +2487,8 @@ async function scanFut(){
         }
       });
       cands.sort(function(a, b){ return b.qv - a.qv; });
-      cands = cands.slice(0, 60);
+      scTmp.candAll = cands.length; cands = cands.slice(0, 60); scTmp.matched = []; var sa = {};
+      gRows.forEach(function(r){ var e = matchFut(r, info, ticks); if (e && !sa[e.symbol]) { sa[e.symbol] = 1; scTmp.matched.push({a: r.addr.toLowerCase(), s: r.sym, f: e.symbol, qv: (ticks[e.symbol] && ticks[e.symbol].qv) || 0, pass: !!futE(r, info, ticks)}); } });
     } else {
       var arr = info.all.map(function(e){
         var t = ticks[e.symbol] || {};
@@ -2517,6 +2524,7 @@ async function scanFut(){
       healthSet("futrest", ranked.filter(function(c){ return c.addr && !(c.rest && c.rest.gl && c.rest.tk); }).map(function(c){ return {k: "L/S ali taker", sym: c.label, msg: ""}; }));
       var okL = ok.filter(function(c){ return c.addr; });
       if (okL.length) { calcLeaders(okL); renderLeaders(); }
+      scanFutStats(cands, ok, passed.length, ranked.length, near);
       await pool(lastLead, 4, async function(c){ if (!c.rest) c.rest = await getRest(c.sym); });
       logHist(okL, ticks, prem); logScan(okL, ticks);
       var added = logSignals(okL, ticks, prem);
@@ -3171,7 +3179,7 @@ function coinText(){
   var out = $("out");
   if (!out || !out.dataset.sym || !lastAddr) return null;
   var f = function(t){ return new Date(t).toLocaleString("sl-SI"); };
-  var s = "=== PODATKI ŽETONA: " + out.dataset.sym + " (" + out.dataset.chain + ") ===\nNaslov: " + lastAddr + "\nČas kopiranja: " + f(Date.now()) + "\n\n" + txt(out);
+  var s = "=== PODATKI ŽETONA: " + out.dataset.sym + " (" + out.dataset.chain + ") ===\nNaslov: " + lastAddr + "\nČas kopiranja: " + f(Date.now()) + "\nPregled osvežen: " + (lastRunAt ? f(lastRunAt) + " (pred " + Math.round((Date.now() - lastRunAt) / 60000) + " min)" : "ni podatka") + "\n" + coinScanStatus() + "\n" + txt(out);
   if (lastAn) {
     var an = lastAn;
     s += "\n\n=== SUROVA TRGOVANJA ===\nOkno: " + f(an.t0) + " – " + f(an.t1) + ", " + an.n + " trgovanj\n\nTop 15 denarnic po prometu (naslov | razred | št. | nakupi | prodaje | razlogi):\n";
@@ -3196,7 +3204,7 @@ async function futText(){
   if (!curTF) return "";
   try {
     var info = await getFutInfo(), ticks = await getTicks();
-    var e = matchFut({sym: sym, price: curTF.price}, info, ticks);
+    var e = matchFut({sym: sym, price: livePx()}, info, ticks);
     if (!e) return h + "Ni para na Binance Futures (ali cena ni skladna s futures parom).\n";
     var oi = await getOI(e.symbol), rest = (await getRest(e.symbol)) || {}, kl = null, pr = null;
     try { kl = await getKl(e.symbol); } catch (x) {}
@@ -3249,7 +3257,7 @@ function otherText(){
       s += [k.replace(/USDT$/, ""), hhmm(x.t), String(+Number(x.px).toPrecision(5)), sgn(x.p15), sgn(x.o15), fr(x.vx), x.vv == null ? "–" : usd(x.vv), fr(x.tk), fr(x.ls), x.f == null ? "–" : fr3(x.f) + " %"].join(" | ") + "\n";
     });
   });
-  s += logText() + healthText() + tradersText() + "\n--- Signali (skupine) ---\n" + txt($("sigbox")) + "\n\n--- Vsi signali (kovanec | okno | stanje | čas | cena | vol | OI | cena% | funding | izid 15m/30m/1h/3h | opis) ---\n";
+  s += logText() + healthText() + scanText() + tradersText() + "\n--- Signali (skupine) ---\n" + txt($("sigbox")) + "\n\n--- Vsi signali (kovanec | okno | stanje | čas | cena | vol | OI | cena% | funding | izid 15m/30m/1h/3h | opis) ---\n";
   loadSigs().forEach(function(x){
     s += [x.label, x.per, x.st, new Date(x.t).toLocaleString("sl-SI"), price(x.p0), fr(x.vx) + "x", sgn(x.oc), sgn(x.pc), x.fund == null ? "–" : fr3(x.fund * 100) + " %",
       ["15m", "30m", "1h", "3h"].map(function(k){ var v = x.o && x.o[k]; return typeof v === "number" ? sgn(v) : "…"; }).join("/"), x.msg || ""].join(" | ") + "\n";
@@ -3260,6 +3268,7 @@ function otherText(){
   return s;
 }
 $("cpcoin").addEventListener("click", async function(){
+  if (lastAddr && Date.now() - lastRunAt > 180000) { $("cpmsg").textContent = "Pregled je star, osvežujem…"; await freshRun(); }
   var t = coinText();
   if (!t) { $("cpmsg").textContent = "Najprej preveri žeton."; return; }
   $("cpmsg").textContent = "Zbiram futures podatke…";
@@ -3473,7 +3482,7 @@ async function renderLogCoin(my){
   var box = $("lgcoin");
   if (!box || !curTF) return;
   try {
-    var e = matchFut({sym: curTF.sym, price: curTF.price}, await getFutInfo(), await getTicks());
+    var e = matchFut({sym: curTF.sym, price: livePx()}, await getFutInfo(), await getTicks());
     if (my !== runCounter) return;
     var L = loadLog(), fs = e ? e.symbol : null, ss = curTF.sym, evs = eventsFor(ss, lastAddr);
     var hs = Object.keys(L).map(Number).sort(function(a, b){ return b - a; }).filter(function(h){ return (fs && L[h].c[fs]) || spOf(L[h], ss); }).slice(0, 24);
@@ -4015,11 +4024,137 @@ function evtText(){
   });
   return t;
 }
+var SC = {alpha: null, fut: null}, scTmp = {}, SCK = "ct_scans";
+function livePx(){
+  var a = (lastAddr || "").toLowerCase(), r = a ? gRows.filter(function(x){ return x.addr.toLowerCase() === a; })[0] : null;
+  return (r && r.price > 0) ? r.price : (curTF && curTF.price);
+}
+async function freshRun(){
+  try {
+    $("addr").value = lastAddr; await run();
+    var t0 = Date.now();
+    while (Date.now() - t0 < 30000) {
+      var busy = ["b15", "h6", "flow", "lgcoin"].some(function(id){ var e = $(id); return e && /Nalagam/.test(e.textContent); });
+      if (!busy) break;
+      await new Promise(function(r){ setTimeout(r, 1000); });
+    }
+  } catch (e) {}
+}
+function filterWhy(r){
+  var w = [];
+  if (!liveOk(r)) { if (r.vol < settings.min24) w.push("promet 24 h " + usd(r.vol) + " < " + usd(settings.min24)); else if (r.v1 < settings.min1h) w.push("promet 1 h " + usd(r.v1) + " < " + usd(settings.min1h)); }
+  if (r.liq < settings.minLiq) w.push("likvidnost " + usd(r.liq) + " < " + usd(settings.minLiq));
+  return w.join(", ");
+}
+function scSnap(r){ return {s: r.sym, a: r.addr.toLowerCase(), liq: r.liq, vol: r.vol, v1: r.v1, m5: r.m5, h1: r.h1, j: !!r.jump, why: filterWhy(r)}; }
+function scanAlphaStats(toks, best){
+  var rows = gRows, vis = visibleRows(), dex = 0, no = [];
+  toks.forEach(function(t){ var k = String(t.contractAddress).toLowerCase(); if (best[k]) dex++; else if (pf(t.volume24h) >= settings.min24) no.push(t.symbol); });
+  var exc = rows.filter(function(r){ return !(r.liq >= settings.minLiq && liveOk(r)); }).sort(function(a, b){ return b.vol - a.vol; });
+  SC.alpha = {t: Date.now(), ms: H.alphaMs || 0, tokN: toks.length, dexN: dex, noData: no, rowsN: rows.length,
+    n24: rows.filter(function(r){ return r.vol >= settings.min24; }).length, n1: rows.filter(liveOk).length, jumpN: rows.filter(function(r){ return r.jump; }).length,
+    nVis: vis.length, missN: rows.filter(function(r){ return r.miss && !r.fixed; }).length,
+    vis: vis.slice().sort(function(a, b){ return b.v1 - a.v1; }).map(scSnap), exc: exc.slice(0, 40).map(scSnap), excN: exc.length};
+  renderScans();
+}
+function scanFutStats(cands, ok, passedN, rankedN, near){
+  var m = scTmp.matched, cs = {}, byAddr = {}, miss = [];
+  cands.forEach(function(c){ cs[c.sym] = 1; var good = !!(c.oi && c.kl); if (c.addr) byAddr[c.addr.toLowerCase()] = {f: c.sym, ok: good}; if (!good) miss.push({s: c.label, f: c.sym, why: (c.oi ? "" : "brez OI ") + (c.kl ? "" : "brez svečk")}); });
+  var off = m ? m.filter(function(x){ return !x.pass || !cs[x.f]; }).map(function(x){ return {s: x.s, f: x.f, qv: x.qv, why: x.pass ? "izven top 60" : "izven spot filtra"}; }).sort(function(a, b){ return b.qv - a.qv; }) : [];
+  SC.fut = {t: Date.now(), scope: futScope, candAll: scTmp.candAll, candN: cands.length, matchedN: m ? m.length : null, passN: m ? m.filter(function(x){ return x.pass; }).length : null,
+    off: off.slice(0, 40), offN: off.length, okN: ok.length, miss: miss, byAddr: byAddr, passedN: passedN, rankedN: rankedN, near: !!near, lead: lastLead.length,
+    cands: cands.map(function(c){ return {s: c.label, f: c.sym, qv: c.qv, ok: !!(c.oi && c.kl)}; })};
+  recScan(); renderScans();
+}
+function scHist(){ try { return JSON.parse(localStorage.getItem(SCK) || "[]"); } catch (e) { return []; } }
+function recScan(){
+  var A = SC.alpha, F = SC.fut;
+  if (!A || !F) return;
+  var h = scHist(), now = Date.now(), last = h[h.length - 1];
+  if (last && now - last.t < 270000) return;
+  h.push({t: now, tok: A.tokN, dex: A.dexN, no: A.noData.length, n24: A.n24, vis: A.nVis, fc: F.candN, fo: F.okN, ms: Math.round(A.ms / 100) / 10});
+  try { localStorage.setItem(SCK, JSON.stringify(h.slice(-300))); } catch (e) {}
+}
+function fMark(a){ var F = SC.fut, x = F && F.byAddr && F.byAddr[a]; return x ? (x.ok ? x.f : x.f + " (brez OI/svečk)") : "–"; }
+function scTbl(head, rows, cls){
+  return '<table class="pairs ' + (cls || "motion") + '"><thead><tr>' + head.map(function(h){ return '<th>' + esc(h) + '</th>'; }).join("") + '</tr></thead><tbody>' +
+    rows.map(function(r){ return '<tr>' + r.map(function(c){ return '<td>' + c + '</td>'; }).join("") + '</tr>'; }).join("") + '</tbody></table>';
+}
+function scDet(k, title, n, body){
+  return '<details class="sg" data-k="' + k + '"' + (sgOpen[k] ? ' open' : '') + '><summary><div class="top"><span><b>' + esc(title) + '</b></span><span class="stat">' + esc(String(n)) + '</span></div></summary><div class="sgbody" style="overflow-x:auto">' + body + '</div></details>';
+}
+function renderScans(){
+  var sm = $("scsum"), ls = $("sclists"), hs = $("schist");
+  if (!sm || !ls || !hs) return;
+  var A = SC.alpha, F = SC.fut, now = Date.now(), h = "", L = "";
+  if (!A) { sm.innerHTML = '<div class="loading">Še ni skena.</div>'; ls.innerHTML = ""; }
+  else {
+    h += metric("Alpha seznam (Binance)", A.tokN + " žetonov", "Pred " + Math.round((now - A.t) / 1000) + " s, sken " + (A.ms / 1000).toFixed(1).replace(".", ",") + " s. DEXScreener je vrnil podatke za " + A.dexN + ". Brez DEX podatkov (promet 24 h nad pragom): " + (A.noData.length ? A.noData.slice(0, 12).join(", ") + (A.noData.length > 12 ? " …" : "") : "nobenega") + ".", A.noData.length ? "amber" : "green");
+    h += metric("Filter 1: promet 24 h ≥ " + usd(settings.min24), String(A.n24), "Od " + A.rowsN + " žetonov s podatki.", "");
+    h += metric("Filter 2: promet 1 h ≥ " + usd(settings.min1h) + " (ali ⚡)", String(A.n1), "Skok prometa ⚡ ima " + A.jumpN + " žetonov.", "");
+    h += metric("Filter 3: likvidnost ≥ " + usd(settings.minLiq), String(A.nVis), "To je seznam za trend, opozorila in dnevnik. Glavni bazen ni viden pri " + A.missN + " žetonih.", "green");
+    if (F) {
+      h += metric("Futures: Alpha z futures parom", F.matchedN == null ? "–" : String(F.matchedN), F.matchedN == null ? "Izbran je obseg »Vsi futures«, povezava z Alpha se ne računa." : "Čez spot filter (ali futures promet nad $50M): " + F.passN + ", pregleda se največ 60 (kandidatov " + F.candAll + "). Izven filtra ali top 60: " + F.offN + ".", "");
+      h += metric("Futures: pregledanih (OI + svečke)", F.okN + " od " + F.candN, F.miss.length ? "Brez podatkov: " + F.miss.slice(0, 8).map(function(x){ return x.s + " (" + x.why.trim() + ")"; }).join(", ") + "." : "Vsi kandidati imajo OI in svečke.", F.miss.length ? "amber" : "green");
+      h += metric("Futures: prikaz in voditelji", F.rankedN + " v panelu", "Izpolnjujejo pogoje: " + F.passedN + (F.near ? " (panel kaže najbližje)" : "") + ". Voditelji 6 h: " + F.lead + ". Sken pred " + Math.round((now - F.t) / 1000) + " s.", "");
+    } else h += '<div class="loading">Futures sken še ni tekel.</div>';
+    sm.innerHTML = h;
+    L += scDet("sc_pass", "Čez filter", A.vis.length, scTbl(["Žeton", "Likv.", "Prom. 24 h", "Prom. 1 h", "5 min", "1 h"], A.vis.map(function(x){
+      return [esc(x.s) + (F && F.byAddr[x.a] ? ' <span class="stat">F</span>' : '') + (x.j ? ' ⚡' : ''), esc(usd(x.liq)), esc(usd(x.vol)), esc(usd(x.v1)), cv(x.m5), cv(x.h1)]; })));
+    L += scDet("sc_exc", "Izločeni (z razlogom)", A.excN, scTbl(["Žeton", "Prom. 24 h", "Prom. 1 h", "Razlog"], A.exc.map(function(x){ return [esc(x.s), esc(usd(x.vol)), esc(usd(x.v1)), esc(x.why)]; }), "") + (A.excN > A.exc.length ? '<div class="cap">Prikazanih 40 z največjim prometom 24 h, še ' + (A.excN - A.exc.length) + ' z manjšim.</div>' : ''));
+    if (A.noData.length) L += scDet("sc_nod", "Brez DEX podatkov", A.noData.length, '<div class="cap">' + esc(A.noData.join(", ")) + '</div>');
+    if (F) {
+      L += scDet("sc_fc", "Futures: kandidati", F.candN, scTbl(["Alpha", "Par", "Fut. prom. 24 h", "Stanje"], F.cands.map(function(x){ return [esc(x.s), esc(x.f), esc(usd(x.qv)), x.ok ? "pregledan" : '<span class="thin">brez OI/svečk</span>']; })));
+      if (F.offN) L += scDet("sc_foff", "Futures: povezani, a nepregledani", F.offN, scTbl(["Alpha", "Par", "Fut. prom. 24 h", "Razlog"], F.off.map(function(x){ return [esc(x.s), esc(x.f), esc(usd(x.qv)), esc(x.why)]; })));
+    }
+    ls.innerHTML = L;
+  }
+  var H2 = scHist().slice(-30).reverse();
+  hs.innerHTML = H2.length ? scTbl(["Ura", "Alpha", "DEX", "Čez filter", "Fut. kand.", "Fut. pregl.", "Sken"], H2.map(function(x){ return [esc(hhmm(x.t)), x.tok, x.dex, x.vis, x.fc, x.fo, esc(fr(x.ms)) + " s"]; })) +
+    '<div class="cap">Zgodovina skenov (po en zapis na 5 min, zadnjih 30). Nenaden padec stolpca »Čez filter« ali »Fut. pregl.« pomeni slab sken.</div>' : '<div class="loading">Zgodovina skenov se začne beležiti ob prvem skenu.</div>';
+}
+function scanText(){
+  var A = SC.alpha, F = SC.fut, s = "\n--- Skeni in filtri ---\n";
+  if (!A) return s + "ni skena\n";
+  var f = function(t){ return new Date(t).toLocaleTimeString("sl-SI"); }, ln = function(a){ return a.join(" | ") + "\n"; };
+  s += "Alpha sken " + f(A.t) + " (" + (A.ms / 1000).toFixed(1) + " s): seznam " + A.tokN + " · DEX podatki " + A.dexN + " · brez DEX " + A.noData.length + " (" + A.noData.join(", ") + ") · promet 24 h ≥ " + usd(settings.min24) + ": " + A.n24 + " · + promet 1 h ≥ " + usd(settings.min1h) + " ali ⚡: " + A.n1 + " (⚡ " + A.jumpN + ") · + likvidnost ≥ " + usd(settings.minLiq) + ": " + A.nVis + " · glavni bazen ni viden: " + A.missN + "\n";
+  s += "Čez filter (žeton | futures | likv | promet 24 h | promet 1 h | 5 min | 1 h):\n";
+  A.vis.forEach(function(x){ s += ln([x.s + (x.j ? " ⚡" : ""), fMark(x.a), usd(x.liq), usd(x.vol), usd(x.v1), sgn(x.m5), sgn(x.h1)]); });
+  s += "Izločeni (žeton | promet 24 h | promet 1 h | likv | razlog), prvih " + A.exc.length + " od " + A.excN + ":\n";
+  A.exc.forEach(function(x){ s += ln([x.s, usd(x.vol), usd(x.v1), usd(x.liq), x.why]); });
+  if (F) {
+    s += "Futures sken " + f(F.t) + " (obseg " + F.scope + "): Alpha z futures parom " + F.matchedN + " · čez filter " + F.passN + " · kandidatov " + F.candAll + " (pregleda se 60) · pregledanih " + F.okN + " · v panelu " + F.rankedN + " (izpolnjujejo " + F.passedN + (F.near ? ", najbližje" : "") + ") · voditelji " + F.lead + "\n";
+    s += "Futures kandidati (alpha | par | promet 24 h | stanje):\n";
+    F.cands.forEach(function(x){ s += ln([x.s, x.f, usd(x.qv), x.ok ? "pregledan" : "brez OI/svečk"]); });
+    s += "Futures povezani, a nepregledani (alpha | par | promet 24 h | razlog), prvih " + F.off.length + " od " + F.offN + ":\n";
+    F.off.forEach(function(x){ s += ln([x.s, x.f, usd(x.qv), x.why]); });
+  }
+  s += "Zgodovina skenov (ura | tok | dex | brez dex | prom. 24 h | čez filter | fut. kand. | fut. pregl. | sken s):\n";
+  scHist().slice(-48).forEach(function(x){ s += ln([new Date(x.t).toLocaleString("sl-SI", {day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit"}), x.tok, x.dex, x.no, x.n24, x.vis, x.fc, x.fo, x.ms]); });
+  return s;
+}
+function coinScanStatus(){
+  var out = $("out"), sym = out && out.dataset.sym, a = String(lastAddr || "").toLowerCase(), A = SC.alpha, F = SC.fut;
+  var s = "--- Status v skenu: " + (sym || "") + " ---\n";
+  if (!A) return s + "Alpha sken še ni tekel.\n";
+  var r = gRows.filter(function(x){ return x.addr.toLowerCase() === a; })[0];
+  if (!r) return s + "Žeton ni v rezultatih skena (ni v Alpha seznamu ali DEXScreener ni vrnil podatkov; označen kot »brez DEX«: " + (A.noData.indexOf(sym) >= 0 ? "da" : "ne") + ").\n";
+  var why = filterWhy(r);
+  s += "Alpha sken pred " + Math.round((Date.now() - A.t) / 1000) + " s: cena " + price(r.price) + " · likv. " + usd(r.liq) + " (prag " + usd(settings.minLiq) + ") · promet 24 h " + usd(r.vol) + " (prag " + usd(settings.min24) + ") · promet 1 h " + usd(r.v1) + " (prag " + usd(settings.min1h) + ")" + (r.jump ? " · ⚡ skok prometa" : "") + (r.miss ? " · glavni bazen ni viden (DEX " + usd(r.dexLiq) + ")" : "") + (r.stale ? " · stari podatki (" + r.stale + " skenov)" : "") + "\n";
+  s += "Filter: " + (why ? "IZLOČEN: " + why : "čez filter") + "\n";
+  var e = (futInfo && tickCache) ? matchFut(r, futInfo, tickCache) : null;
+  if (!e) s += "Futures: ni para ali cena ni skladna.\n";
+  else {
+    var qv = tickCache[e.symbol] && tickCache[e.symbol].qv, x = F && F.byAddr[a], sc = lastFutOk.filter(function(c){ return c.sym === e.symbol; })[0];
+    s += "Futures: par " + e.symbol + " · promet 24 h " + usd(qv) + " · " + (x ? (x.ok ? "v kandidatih, pregledan (OI in svečke)" : "v kandidatih, brez OI ali svečk") : "ni med kandidati zadnjega skena (" + (futE(r, futInfo, tickCache) ? "izven top 60" : "izven spot filtra in futures promet pod $50M") + ")") + (sc ? "" : " · ni v lastFutOk") + "\n";
+  }
+  return s;
+}
 function showTab(t){
   document.body.setAttribute("data-t", t);
   Array.prototype.forEach.call(document.querySelectorAll("#tabbar button"), function(b){ b.classList.toggle("on", b.getAttribute("data-t") === t); });
   try { localStorage.setItem("ct_tab", t); } catch (e) {}
-  if (t === "log") { renderTop6(false); renderTraders(); }
+  if (t === "log") { renderTop6(false); renderTraders(); renderScans(); }
   window.scrollTo(0, 0);
 }
 $("tabbar").addEventListener("click", function(e){ var b = e.target.closest("button"); if (b) showTab(b.getAttribute("data-t")); });
