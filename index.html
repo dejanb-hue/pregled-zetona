@@ -290,11 +290,14 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <h2>Papirnati bot<span class="info" role="button" tabindex="0" data-info="sec_bot" aria-label="Razlaga">ⓘ</span></h2>
   <p class="note">Samo beleži, nič se ne izvede. Nove pozicije dobijo trenutne nastavitve, odprte ohranijo tiste iz trenutka vstopa. Sprožilci delujejo ob odprti strani in vklopljenem samodejnem osveževanju, pozicije se poračunajo iz 1-min svečk Binance Futures (cena futures je približek spot cene).</p>
   <div class="card settings" id="botset"></div>
-  <div class="row" style="margin-top:8px"><button class="ghost small" id="botrun">Osveži</button><button class="ghost small" id="botexp">Kopiraj zapise</button><button class="ghost small" id="botclr">Počisti</button></div>
+  <div class="row" style="margin-top:8px"><button class="ghost small" id="botrun">Osveži</button><button class="ghost small" id="botexp">Kopiraj zapise</button><button class="ghost small" id="botlong">Počisti dolge</button><button class="ghost small" id="botclr">Počisti</button></div>
   <div class="stat" id="botmsg" style="margin-top:6px"></div>
   <h2>Povzetek po različicah</h2><div class="card" id="botsum" style="overflow-x:auto"></div>
+  <h2>Opazovanje po signalu</h2><div class="card" id="botwatch" style="overflow-x:auto"></div>
   <h2>Odprte pozicije</h2><div class="card" id="botopen" style="overflow-x:auto"></div>
   <h2>Zaprte pozicije</h2><div class="card" id="botclosed" style="overflow-x:auto"></div>
+  <h2>Podrobnosti pozicij<span class="info" role="button" tabindex="0" data-info="sec_botdet" aria-label="Razlaga">ⓘ</span></h2><p class="note">Tapni pozicijo: povod za vstop, stanje trga ob vstopu, spremljanje stopa in razlog za izstop.</p>
+  <div class="card" id="botdet" style="padding:4px 10px"></div>
   </div>
   <div data-tab="ana">
   <h2>Analiza podatkov<span class="info" role="button" tabindex="0" data-info="sec_ana" aria-label="Razlaga">ⓘ</span></h2>
@@ -350,7 +353,7 @@ function gtNext(){
 function fetch(url, opt){
   if (String(url).indexOf("api.geckoterminal.com") < 0) return fetchNow(url, opt);
   var prio = opt && opt.prio ? opt.prio : 0;
-  if (prio && gtQ.length > (prio >= 2 ? 15 : 30)) return Promise.reject(new Error("GeckoTerminal: čakalna vrsta je polna."));
+  if (prio && gtQ.length > (prio >= 2 ? 15 : 30)) { H.gtFull++; return Promise.reject(new Error("GeckoTerminal: čakalna vrsta je polna.")); }
   return new Promise(function(res, rej){
     gtQ.push({url: url, opt: opt ? Object.assign({}, opt) : {}, prio: prio, seq: ++gtSeq, tries: 0, res: res, rej: rej});
     gtNext();
@@ -400,7 +403,8 @@ var INFO = {
   sec_dflow: ["Promet po vrsti trgovcev · zbirka", "Kovanci, za katere si v zavihku Žeton zbiral trgovanja (največ 4, zadnjih 24 h). Deleži normalnih trgovcev, kitov in botov so del prometa v izbranem oknu. Neto = nakupi minus prodaje brez botov. Razvrstitev je ocena po pravilih, lovci na Alpha točke so pogosto videti kot boti. Tapni kovanec za podrobnosti po urah."],
   sec_health: ["Zdravje podatkov", "Kontrolni seznam virov (Alpha/DEXScreener, futures, GeckoTerminal) in kovancev z luknjami. Težave se beležijo z začetkom in trajanjem, stran jih skuša sama rešiti (do 2 poskusa, drug vir). Pop. = število poskusov popravka. Brez 5 min ali 1 h pri kovancu brez trgovanj ni težava."],
   sec_ana: ["Analiza podatkov", "Prilepi besedilo iz gumba »Kopiraj: ostali podatki«. Izračun poteka lokalno: najboljši in najslabši spot, futures stanja, signali in opozorila po skupinah (povprečje in delež pozitivnih izidov), zgodovina posnetkov in dnevni povzetki. Majhen vzorec ni dokaz."],
-  sec_bot: ["Papirnati bot", "Sprožilec: taker skok z razmerjem nakupi/prodaje nad pragom. A = sprožilec + potrditev (rast volumna ali OI) + trend (cena 15 min in 1 h nad 0), trail stop. B = samo sprožilec, trail (kontrola). C = kot A, a fiksen stop in cilj.\nTrail: začetni stop pod vstopom. Ko rast doseže prag začetka, je stop pod najvišjo ceno za razdaljo do praga. Nad pragom velike rasti je razdalja delež rasti (npr. 50 %: pri +20 % je stop −10 %, pri +30 % −15 %). Ob pragu se proda nastavljen del pozicije. Odstotek »prodaj del« je moja razlaga tvojega opisa.\nV isti svečki velja konzervativno: najprej stop. Vstop in izstop vsebujeta provizijo in zdrs iz likvidnosti. Majhen vzorec ni dokaz."],
+  sec_botdet: ["Podrobnosti pozicij", "Vstop: kateri pogoji so sprožili pozicijo (taker skok, potrditev z volumnom ali OI, trend), stanje trga (cena po oknih, stanje iz cene in OI, taker, L/S, funding), spot podatki in opozorila v zadnjih 30 min, stroški in zdrs.\nSpremljanje: trail se začne, stop se dvigne, prag velike rasti z delno prodajo.\nIzstop: razlog (začetni stop, trail stop, cilj, čas), svečka izstopa (OHLC, promet proti prejšnjim 5 min, delež agresivnih nakupov), vrh, padec od vrha, bruto in neto rezultat. Stari zapisi brez podrobnosti kažejo samo kontekst ob vstopu. Isti podatki so v gumbu Kopiraj zapise in v Kopiraj: ostali podatki."],
+  sec_bot: ["Papirnati bot", "Sprožilec: taker skok z razmerjem nakupi/prodaje nad pragom. A = sprožilec + potrditev (rast volumna ali OI) + trend (cena 15 min in 1 h nad 0), trail stop. B = samo sprožilec, trail (kontrola). C = kot A, a fiksen stop in cilj.\nTrail: začetni stop pod vstopom. Ko rast doseže prag začetka, je stop pod najvišjo ceno za razdaljo do praga. Nad pragom velike rasti je razdalja delež rasti (npr. 50 %: pri +20 % je stop −10 %, pri +30 % −15 %). Ob pragu se proda nastavljen del pozicije. Odstotek »prodaj del« je moja razlaga tvojega opisa.\nV isti svečki velja konzervativno: najprej stop. Vstop in izstop vsebujeta provizijo in zdrs iz likvidnosti. Majhen vzorec ni dokaz.\nOpazovanje: signal ne odpre pozicije takoj. Bot spremlja 1-min svečke najmanj »opazovanje« minut (največ do zgornje meje). Zavrne, če cena pade za več kot nastavljeni prag ali če zgodovina kaže samo kratek skok (15 min je več kot 70 % rasti 3 h, ali 3 h ni v rasti). Vstopi šele, ko je cena nad ceno signala, zadnja svečka raste in zelena, agresivnih nakupov je vsaj 50 %. Zavrnjeni signali so v tabeli Opazovanje.\nMirovanje: če v oknu cena skoraj ne niha (razpon pod pragom) in vrh ni dosegel praga, bot izstopi po zadnji ceni; prav tako po nastavljenih minutah brez rasti. Izstop je po zaprtju svečke, dejanska cena je lahko slabša."],
   sec_watch: ["Moj seznam", "Shranjeni naslovi žetonov (gumb Shrani v seznam). Tapni žeton za pregled, ✕ ga odstrani. Shranjeno v brskalniku te naprave."],
   set_lead: ["Voditelji: prag prometa", "Najmanjši futures promet 6 h v milijonih USD, da je kovanec sploh upoštevan za uvrstitev med voditelje in za beleženje signalov."],
   set_px30: ["Opozorilo cena 30 min", "Opozori, ko se cena v 30 min spremeni za več kot ta prag navzgor ali navzdol. Futures: iz 5-min svečk (zadnja cena proti zaprtju 6 svečk nazaj, okno 30 do 35 min). Spot žetoni brez futures: iz svečk Binance Alpha (kandidati iz razdelka Trend · spot). Ujame postopne premike, ki ne presežejo praga za 15 min. Kratica ⚑30m."],
@@ -1661,7 +1665,7 @@ async function scanAlpha(){
     buySignals();
     setStatus(rows.length + " žetonov · " + new Date().toLocaleTimeString("sl-SI"));
     if (gTab === "15m") compute15();
-    spotTrend(); hotPoll();
+    spotTrend(); hotPoll(); fillSpotAuto();
   } catch (e) {
     var net = (e instanceof TypeError);
     healthSet("alphasrc", [{k: "sken", sym: "Alpha", msg: String(e && e.message || e)}]);
@@ -1677,7 +1681,7 @@ var gtFixCache = {};
 async function gtMain(r){
   var cfg = CHAINS[r.chain], al = r.addr.toLowerCase();
   var resp = await fetch("https://api.geckoterminal.com/api/v2/networks/" + cfg.gt + "/tokens/" + encodeURIComponent(r.addr) + "/pools?page=1", {prio: 1});
-  if (!resp.ok) return null;
+  if (!resp.ok) throw new Error("HTTP " + resp.status);
   var j = await resp.json(), arr = (j && j.data) || [];
   var own = arr.filter(function(x){
     var bt = x.relationships && x.relationships.base_token && x.relationships.base_token.data && x.relationships.base_token.data.id;
@@ -1713,7 +1717,7 @@ function applyD(r, d, full){
     if (d.m5 != null) r.m5 = d.m5;
     if (d.h1 != null) r.h1 = d.h1;
     r.v1 = Math.max(r.v1, d.v1 || 0);
-    r.miss = false; r.fixed = true;
+    r.miss = false; r.fixed = true; r.afix = true;
     return;
   }
   if (d.price > 0 && (full || !(r.price > 0))) r.price = d.price;
@@ -1724,7 +1728,7 @@ function applyD(r, d, full){
   if (full) {
     r.v1 = Math.max(r.v1, d.v1); r.vol = Math.max(r.vol, d.v24); r.liq = Math.max(r.liq, d.liq);
     if (d.b1 + d.s1 > r.b1 + r.s1) { r.b1 = d.b1; r.s1 = d.s1; }
-    r.pdx = d.dex || ""; r.pliq = d.tl > 0 ? d.tl : 0;
+    r.pdx = d.dex || ""; r.pliq = d.tl > 0 ? d.tl : 0; r.afix = false;
     r.miss = false; r.fixed = true;
   }
 }
@@ -1740,15 +1744,16 @@ async function fixMissBg(){
   fixBusy = true;
   try {
     var cand = gRows.filter(function(r){ return (r.miss || r.fixed) && r.vol >= settings.min24 && CHAINS[r.chain]; })
-      .sort(function(a, b){ var ua = (a.miss && !a.fixed) ? 0 : 1, ub = (b.miss && !b.fixed) ? 0 : 1; if (ua !== ub) return ua - ub; var ca = gtFixCache[a.addr.toLowerCase()], cb = gtFixCache[b.addr.toLowerCase()]; return (ca ? ca.t : 0) - (cb ? cb.t : 0); }).slice(0, 14);
+      .sort(function(a, b){ var ua = poolOk(a) ? 1 : 0, ub = poolOk(b) ? 1 : 0; if (ua !== ub) return ua - ub; var ca = gtFixCache[a.addr.toLowerCase()], cb = gtFixCache[b.addr.toLowerCase()]; return (ca ? ca.t : 0) - (cb ? cb.t : 0); }).slice(0, 14);
     var did = 0;
     for (var i = 0; i < cand.length; i++) {
       var r = cand[i], k = r.addr.toLowerCase(), c = gtFixCache[k];
       if (c && Date.now() - c.t < 150000) continue;
       var d = null;
-      try { d = await gtMain(r); } catch (e) {}
-      if (!d) { try { d = await alphaKlFill(r); } catch (e3) {} }
-      gtFixCache[k] = {t: Date.now(), d: d || (c && c.d) || null};
+      var why = "", via = "";
+      try { d = await gtMain(r); if (d) { via = "GeckoTerminal"; H.fixOk++; } else { why = "GT: ni bazenov žetona"; H.fixNone++; } } catch (e) { why = "GT: " + (e && e.message || e); H.fixErr++; }
+      if (!d) { try { d = await alphaKlFill(r); if (d) { via = "Alpha svečke (bazen ni potrjen)"; H.fixAlpha++; } } catch (e3) {} }
+      gtFixCache[k] = {t: Date.now(), at: Date.now(), d: d || (c && c.d) || null, why: why, via: via || (c && c.via) || "ni uspelo"};
       if (gtFixCache[k].d) { applyD(r, gtFixCache[k].d, true); did++; }
     }
     if (did) { renderGainers(); checkAlphaHealth(); }
@@ -2155,11 +2160,13 @@ function logSpot(){
   visibleRows().forEach(function(r){
     if (!(r.price > 0)) return;
     var e = sp[r.sym] || (sp[r.sym] = {p0: r.price});
-    e.p1 = r.price; e.v = Math.round(r.v1); e.b = r.b1; e.n = r.s1; e.l = Math.round(r.liq); e.c = r.chain;
+    var unc = !poolOk(r);
+    e.p1 = r.price; e.b = r.b1; e.n = r.s1; e.l = Math.round(r.liq); e.c = r.chain;
+    if (!(unc && e.g)) { e.v = Math.round(r.v1); e.u = unc ? 1 : 0; if (!unc) e.g = 0; }
   });
   saveLog(L);
 }
-var H = {dexJobs: 0, dexFail: 0, noData: [], alphaMs: 0, futN: 0, gtFail: 0};
+var H = {dexJobs: 0, dexFail: 0, noData: [], alphaMs: 0, futN: 0, gtFail: 0, gtFull: 0, fixOk: 0, fixNone: 0, fixErr: 0, fixAlpha: 0};
 var HK = "ct_health", hOpen = {}, hLog = [], hiddenAt = 0;
 function hLoad(){ try { hLog = JSON.parse(localStorage.getItem(HK) || "[]"); } catch (e) { hLog = []; } }
 function hMerge(e, arr){
@@ -2252,6 +2259,8 @@ function renderHealth(){
     "Pregledanih " + H.futN + ", z luknjami " + fu.length + (fu.length ? " (" + fu.slice(0, 8).map(function(o){ return o.sym; }).join(", ") + ")" : "") + (by("futsrc").length ? ". Napaka: " + by("futsrc")[0].msg : "") + (fBackoff > now ? ". Binance je omejil, počitek še " + Math.round((fBackoff - now) / 1000) + " s" : "") + ".",
     (by("futsrc").length || fBackoff > now) ? "red" : (fu.length || (ageF != null && ageF > 240)) ? "amber" : "green");
   h += metric("GeckoTerminal vrsta", gtQ.length + " čaka", "Neuspelih zahtevkov od odprtja strani: " + H.gtFail + ".", gtQ.length > 10 || H.gtFail > 5 ? "amber" : "green");
+  var unf = gRows.filter(function(r){ return !poolOk(r) && r.vol >= settings.min24; });
+  h += metric("Popravek glavnega bazena", "uspelo " + H.fixOk + ", Alpha svečke " + H.fixAlpha + ", brez bazenov " + H.fixNone + ", napak " + H.fixErr, "Vrsta polna: " + H.gtFull + "×. Čaka na popravek (" + unf.length + "): " + (unf.length ? unf.slice(0, 8).map(function(r){ var c = gtFixCache[r.addr.toLowerCase()]; return r.sym + (c ? " (" + (c.why || c.via) + ", pred " + Math.round((Date.now() - (c.at || c.t)) / 60000) + " min)" : " (še ni poskusa)"); }).join(", ") : "nobeden") + ".", unf.length ? "amber" : "green");
   box.innerHTML = h;
   var rows = open.map(function(o){ return {o: o, open: true, t0: o.t0, d: now - o.t0}; })
     .concat(hLog.slice(-30).reverse().map(function(o){ return {o: o, open: false, t0: o.t0, d: o.t1 - o.t0}; }));
@@ -3440,9 +3449,9 @@ function hourStat(b, sigs, h){
     if (e.p0 > 0 && e.p1 > 0) ch.push((e.p1 / e.p0 - 1) * 100);
     v += e.v || 0; o += e.o || 0;
   });
-  var spv = 0, spc = [], sall = [];
-  Object.keys(b.sp || {}).forEach(function(k){ var q = b.sp[k]; sall.push({k: k, p0: q.p0, p1: q.p1, v: q.v || 0, c: (q.p0 > 0 && q.p1 > 0) ? (q.p1 / q.p0 - 1) * 100 : null}); spv += q.v || 0; if (q.p0 > 0 && q.p1 > 0) spc.push((q.p1 / q.p0 - 1) * 100); });
-  return {all: all, sall: sall, spv: spv, spm: spc.length ? median(spc) : null, h: h, u: u, lst: lst.sort(function(a, b){ return b.x - a.x; }), n: u.length, sg: sigs.filter(function(s){ return !isAl(s) && Math.floor(s.t / HMS) === h; }).length, al: sigs.filter(function(s){ return isAl(s) && Math.floor(s.t / HMS) === h; }).length,
+  var spv = 0, spu = 0, spc = [], sall = [];
+  Object.keys(b.sp || {}).forEach(function(k){ var q = b.sp[k]; sall.push({k: k, p0: q.p0, p1: q.p1, v: q.v || 0, c: (q.p0 > 0 && q.p1 > 0) ? (q.p1 / q.p0 - 1) * 100 : null}); if (q.u) spu++; else spv += q.v || 0; if (q.p0 > 0 && q.p1 > 0) spc.push((q.p1 / q.p0 - 1) * 100); });
+  return {all: all, sall: sall, spv: spv, spu: spu, spm: spc.length ? median(spc) : null, h: h, u: u, lst: lst.sort(function(a, b){ return b.x - a.x; }), n: u.length, sg: sigs.filter(function(s){ return !isAl(s) && Math.floor(s.t / HMS) === h; }).length, al: sigs.filter(function(s){ return isAl(s) && Math.floor(s.t / HMS) === h; }).length,
     med: ch.length ? median(ch) : null, v: v, o: o, s: b.s, bf: !!b.b, gap: !b.b && b.s < 20 && h < Math.floor(Date.now() / HMS)};
 }
 function dayRows(L, sigs, day){
@@ -3499,7 +3508,7 @@ function renderLog(){
   if (!rows.length) { box.innerHTML = '<div class="loading">Urni zapisi tega dne so že izbrisani (hranijo se 7 dni), ostal je povzetek.</div>'; return; }
   box.innerHTML = '<table class="pairs motion"><thead><tr><th>Ura</th><th>Kov.</th><th>Sig.</th><th>Opoz.</th><th>Cena</th><th>Promet</th><th>OI</th><th>Spot</th><th>Spot prom.</th><th>Skeni</th></tr></thead><tbody>' +
     rows.map(function(r){
-      return '<tr><td>' + hhmm(r.h * HMS) + '</td><td>' + r.n + '</td><td>' + r.sg + '</td><td>' + r.al + '</td><td>' + cv(r.med) + '</td><td>' + esc(usd(r.v)) + '</td><td>' + esc(usd(r.o)) + '</td><td>' + cv(r.spm) + '</td><td>' + (r.spv ? esc(usd(r.spv)) : '–') + '</td><td>' +
+      return '<tr><td>' + hhmm(r.h * HMS) + '</td><td>' + r.n + '</td><td>' + r.sg + '</td><td>' + r.al + '</td><td>' + cv(r.med) + '</td><td>' + esc(usd(r.v)) + '</td><td>' + esc(usd(r.o)) + '</td><td>' + cv(r.spm) + '</td><td>' + (r.spv ? esc(usd(r.spv)) : '–') + (r.spu ? ' <span class="thin">?' + r.spu + '</span>' : '') + '</td><td>' +
         (r.bf ? 'zap.' : r.gap ? '<span class="thin">' + r.s + '</span>' : r.s) + '</td></tr>' +
         (r.lst.length ? '<tr><td colspan="10" class="stat" style="border-top:0;padding-top:0;white-space:normal">' + esc(r.lst.map(function(q){ return q.k + " " + fr(q.x) + "x" + (q.c != null ? " (" + sgn(q.c) + ")" : ""); }).join(" · ")) + '</td></tr>' : '');
     }).join("") + '</tbody></table>';
@@ -3517,8 +3526,8 @@ async function renderLogCoin(my){
       hs.map(function(h){
         var c = (fs && L[h].c[fs]) || null, q = spOf(L[h], ss);
         return '<tr><td>' + hhmm(h * HMS) + (L[h].b ? '*' : '') + '</td><td>' + (c ? cv(c.p0 > 0 ? (c.p1 / c.p0 - 1) * 100 : null) : '–') + '</td><td>' + (c ? esc(usd(c.v)) : '–') + '</td><td>' + (c ? esc(usd(c.o)) : '–') + '</td><td>' + (c ? esc(fr(c.x)) : '–') + '</td><td>' +
-          (q ? cv(q.p0 > 0 && q.p1 > 0 ? (q.p1 / q.p0 - 1) * 100 : null) : '–') + '</td><td>' + (q ? esc(usd(q.v)) : '–') + '</td><td>' + (q ? esc(q.b + ':' + q.n) : '–') + '</td><td>' + (q ? esc(usd(q.l)) : '–') + '</td><td class="stat">' + esc(evTxtH(h, evs)) + '</td></tr>';
-      }).join("") + '</tbody></table><div class="cap">Dog. = signali in opozorila v uri: ' + esc(ABBR) + '. * = zapolnjeno iz Binance svečk. Spot se beleži od te posodobitve naprej (promet = 1 h posnetek ob koncu ure).</div>';
+          (q ? cv(q.p0 > 0 && q.p1 > 0 ? (q.p1 / q.p0 - 1) * 100 : null) : '–') + '</td><td>' + (q ? esc(usd(q.v)) + (q.u ? ' <span class="thin">?</span>' : (q.g ? ' ✓' : '')) : '–') + '</td><td>' + (q ? esc(q.b + ':' + q.n) : '–') + '</td><td>' + (q ? esc(usd(q.l)) : '–') + '</td><td class="stat">' + esc(evTxtH(h, evs)) + '</td></tr>';
+      }).join("") + '</tbody></table><div class="cap">Dog. = signali in opozorila v uri: ' + esc(ABBR) + '. * = zapolnjeno iz Binance svečk. Spot se beleži od te posodobitve naprej (promet = 1 h posnetek ob koncu ure). ? = promet iz DEXScreenerja, glavni bazen ni potrjen (verjetno prenizko). ✓ = popravljeno iz urnih svečk glavnega bazena (GeckoTerminal).</div>';
   } catch (er) { if (my === runCounter) box.innerHTML = '<div class="msg err" style="margin:6px">' + esc(er.message) + '</div>'; }
 }
 async function fillGaps(){
@@ -3526,10 +3535,11 @@ async function fillGaps(){
   fillBusy = true;
   var msg = $("lgmsg"), say = function(t){ if (msg) msg.textContent = t; };
   try {
+    var nfs = 0; try { nfs = await fillSpotVol(12); } catch (e9) {}
     say("Iščem luknje…");
     var L = loadLog(), cur = Math.floor(Date.now() / HMS), need = {}, nn = 0;
     for (var h = cur - 24; h < cur; h++) { var b = L[h]; if (!b || (b.b !== 2 && b.s < 10)) { need[h] = 1; nn++; } }
-    if (!nn) { say("Ni lukenj v zadnjih 24 h."); fillBusy = false; return; }
+    if (!nn) { say("Ni lukenj v zadnjih 24 h." + (nfs ? " Spot promet popravljen: " + nfs + " zapisov." : "")); fillBusy = false; return; }
     var info = await getFutInfo(), ticks = await getTicks();
     if (!gRows.length) await scanAlpha();
     var syms = alphaFutList(info, ticks).slice(0, 40).map(function(c){ return c.sym; });
@@ -3561,7 +3571,7 @@ async function fillGaps(){
       hn++;
     });
     saveLog(L2); renderLog();
-    say("Zapolnjeno: " + hn + " ur, " + syms.length + " kovancev.");
+    say("Zapolnjeno: " + hn + " ur, " + syms.length + " kovancev." + (nfs ? " Spot promet popravljen: " + nfs + " zapisov." : ""));
   } catch (er) { say("Napaka: " + er.message); }
   fillBusy = false;
 }
@@ -3968,23 +3978,25 @@ async function hotFetch(r, prio){
   var tr = await fetchTrades(r.chain, r.pool, r.addr, prio || 2), k = r.addr.toLowerCase();
   var h = hot[k] || (hot[k] = {ids: {}, a: [], sym: r.sym, chain: r.chain, pool: r.pool, liq: r.liq, last: 0});
   tr.forEach(function(x){
-    var key = x.w + "|" + x.blk + "|" + x.t + "|" + x.kind + "|" + x.vol;
+    x.pl = r.pool;
+    var key = x.pl + "|" + x.w + "|" + x.blk + "|" + x.t + "|" + x.kind + "|" + x.vol;
     if (!h.ids[key]) { h.ids[key] = 1; h.a.push(x); }
   });
   if (h.a.length > 2500) {
     var cut = Date.now() - 5400000;
     h.a = h.a.filter(function(x){ return x.t >= cut; }).sort(function(p, q){ return p.t - q.t; }).slice(-2500);
-    h.ids = {}; h.a.forEach(function(x){ h.ids[x.w + "|" + x.blk + "|" + x.t + "|" + x.kind + "|" + x.vol] = 1; });
+    h.ids = {}; h.a.forEach(function(x){ h.ids[x.pl + "|" + x.w + "|" + x.blk + "|" + x.t + "|" + x.kind + "|" + x.vol] = 1; });
   }
   h.last = Date.now(); h.liq = r.liq; h.sym = r.sym; h.chain = r.chain; h.pool = r.pool;
-  h.src = r.fixed ? "GeckoTerminal glavni bazen (" + (r.pdx || "?") + ", likv. " + usd(r.pliq || 0) + ")" : "DEXScreener bazen (likv. " + usd(r.dexLiq != null ? r.dexLiq : r.liq) + ")" + (r.miss ? ", NI potrjen kot glavni" : "");
+  h.ok = poolOk(r);
+  h.src = h.ok ? (r.fixed ? "GeckoTerminal glavni bazen (" + (r.pdx || "?") + ", likv. " + usd(r.pliq || 0) + ")" : "DEXScreener bazen (likv. " + usd(r.dexLiq != null ? r.dexLiq : r.liq) + ")") : "bazen NI potrjen kot glavni (DEX vidi " + usd(r.dexLiq != null ? r.dexLiq : 0) + ", Alpha " + usd(r.liq) + ")";
 }
 async function hotPoll(){
   if (hotBusy || Date.now() - hotAt < 55000 || !gRows.length || !$("auto").checked || document.visibilityState !== "visible") return;
   hotBusy = true; hotAt = Date.now();
   try {
     var now = Date.now(), seen = {}, list = [];
-    var add = function(r){ var k = r.addr.toLowerCase(); if (seen[k] || list.length >= 8 || !r.pool || !CHAINS[r.chain] || (r.miss && !r.fixed)) return; seen[k] = 1; list.push(r); };
+    var add = function(r){ var k = r.addr.toLowerCase(); if (seen[k] || list.length >= 8 || !r.pool || !CHAINS[r.chain] || !poolOk(r)) return; seen[k] = 1; list.push(r); };
     gRows.forEach(function(r){ var u = hotWatch[r.addr.toLowerCase()]; if (u && u > now) add(r); });
     var vis = visibleRows();
     vis.filter(function(r){ return r.jump || (r.m5 != null && Math.abs(r.m5) >= 3); }).sort(function(a, b){ return Math.abs(b.m5 || 0) - Math.abs(a.m5 || 0); }).forEach(add);
@@ -3997,7 +4009,7 @@ async function hotPoll(){
 function hotSummary(k, t0, t1){
   var h = hot[k];
   if (!h) return null;
-  var tw = h.a.filter(function(x){ return x.t >= t0 && x.t <= t1; });
+  var tw = h.a.filter(function(x){ return x.t >= t0 && x.t <= t1 && x.pl === h.pool; });
   if (tw.length < 5) return null;
   var an = analyzeTrades(tw, h.liq || 0), c = an.cls, tot = an.total;
   var pc = function(q){ return tot ? Math.round(c[q].vol / tot * 100) : 0; };
@@ -4009,7 +4021,7 @@ function hotSummary(k, t0, t1){
     nn: Math.round(c.normal.buy + c.whale.buy - c.normal.sell - c.whale.sell), nb: Math.round(c.bot.buy - c.bot.sell),
     sell: top("sell"), buy: top("buy"), big: big ? [big.kind, Math.round(big.vol), big.w, big.t] : null,
     jump: j ? [Math.round(j.d * 10) / 10, j.t.kind, Math.round(j.t.vol), j.t.w, j.t.t] : null,
-    pk: pm != null ? [pm * 60000, Math.round(bk[pm].b), Math.round(bk[pm].s)] : null, pool: h.pool, src: h.src};
+    pk: pm != null ? [pm * 60000, Math.round(bk[pm].b), Math.round(bk[pm].s)] : null, pool: h.pool, src: h.src, ok: h.ok};
 }
 function evtCapture(e){
   if (!e || !e.addr || !/^a_(px|px15|px30|px1h|pxd|jump)$/.test(e.st)) return;
@@ -4021,7 +4033,7 @@ function evtCapture(e){
   var cap = {t: Date.now(), ids: [e.id]};
   evtLast[a] = cap;
   var run = async function(){
-    if (r.miss && !r.fixed && !cap.fixTried) { cap.fixTried = true; try { var d0 = await gtMain(r); if (d0) { gtFixCache[a] = {t: Date.now(), d: d0}; applyD(r, d0, d0.liq != null); } } catch (x0) {} }
+    if (!poolOk(r) && !cap.fixTried) { cap.fixTried = true; try { var d0 = await gtMain(r); if (d0) { gtFixCache[a] = {t: Date.now(), d: d0}; applyD(r, d0, d0.liq != null); } } catch (x0) {} }
     try { await hotFetch(r, 1); } catch (x) {}
     var sm = hotSummary(a, cap.t - 600000, Date.now());
     if (!sm) return;
@@ -4035,7 +4047,7 @@ function evtHtml(s){
   var E = evtLoad()[s.id];
   if (!E) return "";
   var sh = function(arr){ return arr.map(function(w){ return shortA(w[0]) + " " + usd(w[2]) + " (" + w[1] + ", " + w[3] + " tr.)"; }).join(", "); };
-  return (E.src ? '<small>Bazen: ' + esc(E.src) + ' · ' + esc(shortA(E.pool)) + '</small>' : '') + '<small>Trgovci ob dogodku' + infoBtn('evt_tr') + ' (' + esc(hhmm(E.t0) + "–" + hhmm(E.t1)) + ', ' + E.n + ' tr., ' + esc(usd(E.tot)) + '): normalni ' + E.pn + ' % · kiti ' + E.pw + ' % · boti ' + E.pb + ' % · neto brez botov ' + esc(usdS(E.nn)) + ' · boti ' + esc(usdS(E.nb)) + '</small>' +
+  return (E.src ? '<small>Bazen: ' + esc(E.src) + ' · ' + esc(shortA(E.pool)) + '</small>' : '') + (E.ok === false ? '<small class="thin">⚠ Bazen ni potrjen kot glavni: deleži trgovcev niso zanesljivi.</small>' : '') + '<small>Trgovci ob dogodku' + infoBtn('evt_tr') + ' (' + esc(hhmm(E.t0) + "–" + hhmm(E.t1)) + ', ' + E.n + ' tr., ' + esc(usd(E.tot)) + '): normalni ' + E.pn + ' % · kiti ' + E.pw + ' % · boti ' + E.pb + ' % · neto brez botov ' + esc(usdS(E.nn)) + ' · boti ' + esc(usdS(E.nb)) + '</small>' +
     (E.sell && E.sell.length ? '<small>Največ prodali: ' + esc(sh(E.sell)) + '</small>' : '') +
     (E.buy && E.buy.length ? '<small>Največ kupili: ' + esc(sh(E.buy)) + '</small>' : '') +
     (E.jump ? '<small>Največji preskok cene ' + esc(sgn(E.jump[0])) + ' (' + (E.jump[1] === "buy" ? "nakup " : "prodaja ") + esc(usd(E.jump[2])) + ', ' + esc(shortA(E.jump[3])) + ', ' + esc(hhmm(E.jump[4])) + ')</small>' : '') +
@@ -4170,6 +4182,8 @@ function coinScanStatus(){
   var why = filterWhy(r);
   s += "Alpha sken pred " + Math.round((Date.now() - A.t) / 1000) + " s: cena " + price(r.price) + " · likv. " + usd(r.liq) + " (prag " + usd(settings.minLiq) + ") · promet 24 h " + usd(r.vol) + " (prag " + usd(settings.min24) + ") · promet 1 h " + usd(r.v1) + " (prag " + usd(settings.min1h) + ")" + (r.jump ? " · ⚡ skok prometa" : "") + (r.miss ? " · glavni bazen ni viden (DEX " + usd(r.dexLiq) + ")" : "") + (r.fixed ? " · popravljeno prek GeckoTerminala (" + (r.pdx || "?") + ", likv. " + usd(r.pliq || 0) + ")" : "") + (r.fbig ? " · futures promet nad $50M (izjema filtra)" : "") + (r.stale ? " · stari podatki (" + r.stale + " skenov)" : "") + "\n";
   s += "Filter: " + (why ? "IZLOČEN: " + why : "čez filter") + "\n";
+  var fc = gtFixCache[a];
+  if (r.miss || r.fixed) s += "Popravek glavnega bazena: " + (fc ? "pred " + Math.round((Date.now() - (fc.at || fc.t)) / 1000) + " s, " + (fc.via || "?") + (fc.why ? " (" + fc.why + ")" : "") : "še ni poskusa") + (poolOk(r) ? "" : " · bazen NI potrjen") + "\n";
   var e = (futInfo && tickCache) ? matchFut(r, futInfo, tickCache) : null;
   if (!e) s += "Futures: ni para ali cena ni skladna.\n";
   else {
@@ -4203,52 +4217,165 @@ function spot30Alert(r, ca){
 
 /* ---------- papirnati bot ---------- */
 var BKEY = "ct_bot", BCK = "ct_botcfg", botBusy = false;
-var BDEF = {on: true, amt: 100, fee: 0.25, stop0: 5, tStart: 5, tDist: 5, bigAt: 20, bigFac: 50, part: 10, noLower: false, trend: true, maxOpen: 3, maxH: 24, tkMin: 1, volMin: 2, oiMin: 2, cool: 60, fixTgt: 10};
-var BLAB = [["on", "Bot vklopljen", 1], ["amt", "Naložba na pozicijo ($)"], ["fee", "Provizija (% na stran)"], ["stop0", "Začetni stop (% pod vstopom)"], ["tStart", "Trail se začne pri rasti (%)"], ["tDist", "Trail razdalja do praga (%)"], ["bigAt", "Prag velike rasti (%)"], ["bigFac", "Nad pragom: razdalja = delež rasti (%)"], ["part", "Ob pragu prodaj del pozicije (%)"], ["noLower", "Stop se ne sme znižati", 1], ["trend", "A in C: zahtevaj trend (cena 15 min in 1 h nad 0)", 1], ["maxOpen", "Največ odprtih na različico"], ["maxH", "Največ ur v poziciji"], ["tkMin", "Taker nak/prod nad"], ["volMin", "Potrditev: rast volumna vsaj (x)"], ["oiMin", "Potrditev: OI 15 min vsaj (%)"], ["cool", "Premor po izstopu (min)"], ["fixTgt", "C: cilj (%)"]];
+var BDEF = {on: true, amt: 100, fee: 0.25, stop0: 5, tStart: 5, tDist: 5, bigAt: 20, bigFac: 50, part: 10, noLower: false, trend: true, maxOpen: 3, maxH: 4, tkMin: 1, volMin: 2, oiMin: 2, cool: 60, fixTgt: 10, watch: true, watchMin: 5, watchMax: 10, wDD: 4, wUp: 0.5, hist: true, spk: 70, stagWin: 15, stagRng: 1.5, stagGain: 10, noGainMin: 60};
+var BLAB = [["on", "Bot vklopljen", 1], ["amt", "Naložba na pozicijo ($)"], ["fee", "Provizija (% na stran)"], ["stop0", "Začetni stop (% pod vstopom)"], ["tStart", "Trail se začne pri rasti (%)"], ["tDist", "Trail razdalja do praga (%)"], ["bigAt", "Prag velike rasti (%)"], ["bigFac", "Nad pragom: razdalja = delež rasti (%)"], ["part", "Ob pragu prodaj del pozicije (%)"], ["noLower", "Stop se ne sme znižati", 1], ["trend", "A in C: zahtevaj trend (cena 15 min in 1 h nad 0)", 1], ["maxOpen", "Največ odprtih na različico"], ["maxH", "Največ ur v poziciji"], ["tkMin", "Taker nak/prod nad"], ["volMin", "Potrditev: rast volumna vsaj (x)"], ["oiMin", "Potrditev: OI 15 min vsaj (%)"], ["cool", "Premor po izstopu (min)"], ["fixTgt", "C: cilj (%)"], ["watch", "Opazuj po signalu, vstopi šele ob odboju", 1], ["watchMin", "Opazovanje: najmanj minut"], ["watchMax", "Opazovanje: največ minut"], ["wDD", "Zavrni, če cena po signalu pade za (%)"], ["wUp", "Vstop, če je cena nad ceno signala za (%)"], ["hist", "Zgodovina: zavrni samo kratek skok", 1], ["spk", "Skok = 15 min je več kot (%) rasti 3 h"], ["stagWin", "Mirovanje: okno (min)"], ["stagRng", "Mirovanje: razpon cene pod (%)"], ["stagGain", "Mirovanje velja, če vrh pod (%)"], ["noGainMin", "Izstop brez rasti po (min)"]];
 function botCfg(){ var o = {}, c = Object.assign({}, BDEF); try { o = JSON.parse(localStorage.getItem(BCK) || "{}"); } catch (e) {} Object.keys(BDEF).forEach(function(k){ if (typeof o[k] === typeof BDEF[k]) c[k] = o[k]; }); return c; }
 var BCFG = botCfg(), BST = (function(){ try { var a = JSON.parse(localStorage.getItem(BKEY) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } })();
 function botSave(){ try { localStorage.setItem(BKEY, JSON.stringify(BST.slice(-600))); } catch (e) {} }
+function blog(p, t, txt){ p.log = p.log || []; if (p.log.length < 20) p.log.push([t, txt]); }
 function botTrig(c, sp){
   if (!BCFG.on || !c.kl || !(c.kl.last > 0) || !(sp.ratio > BCFG.tkMin)) return;
   var k = c.kl, w = k.vol["15m"], vx = w && w.x, p15 = k.px["15m"], p1 = k.px["1h"], o15 = c.oi && c.oi.c15;
-  var conf = (p15 > 0 && vx >= BCFG.volMin) || (o15 >= BCFG.oiMin), trend = !BCFG.trend || (p15 > 0 && p1 > 0);
+  var okV = p15 > 0 && vx >= BCFG.volMin, okO = o15 >= BCFG.oiMin, conf = okV || okO, trend = !BCFG.trend || (p15 > 0 && p1 > 0);
   var ctx = "taker " + fr(sp.x) + "x, nak/prod " + fr(sp.ratio) + ", vol " + fr(vx) + "x, OI 15m " + sgn(o15) + ", cena 15m " + sgn(p15) + ", 1h " + sgn(p1) + (conf ? ", potrjeno" : "") + (trend ? "" : ", brez trenda");
   var ad = String(c.addr || "").toLowerCase(), row = gRows.filter(function(r){ return ad && r.addr.toLowerCase() === ad; })[0];
-  (conf && trend ? ["A", "B", "C"] : ["B"]).forEach(function(v){ botOpen(v, c, k.last, ctx, row); });
+  var pr = lastPrem[c.sym], rs = c.rest || {}, s15 = stateOf(p15, o15), s1 = stateOf(p1, oiBy(c.oi, "1h"));
+  var why = "taker skok " + fr(sp.x) + "x povprečja, nakupi/prodaje " + fr(sp.ratio) + " (prag " + fr(BCFG.tkMin) + ")" +
+    (conf ? ", potrditev: " + [okV ? "vol " + fr(vx) + "x ≥ " + fr(BCFG.volMin) + " in cena 15 min " + sgn(p15) : "", okO ? "OI 15 min " + sgn(o15) + " ≥ " + fr(BCFG.oiMin) + " %" : ""].filter(Boolean).join(" ali ") : ", brez potrditve (vol " + fr(vx) + "x, OI 15 min " + sgn(o15) + ")") +
+    (trend ? ", trend v redu (cena 15 min " + sgn(p15) + ", 1 h " + sgn(p1) + ")" : ", brez trenda (cena 15 min " + sgn(p15) + ", 1 h " + sgn(p1) + ")");
+  var en = {tk: sp.x, rt: sp.ratio, vx: vx, o15: o15, p15: p15, p30: k.px["30m"], p1: p1, p3: k.px["3h"], fu: (pr && pr.fund != null) ? pr.fund * 100 : null, ls: rs.gl ? rs.gl.now : null, tkr: rs.tk ? rs.tk.r15 : null,
+    st15: s15 ? s15.s : null, st1: s1 ? s1.s : null, why: why, noAC: (conf && trend) ? "" : ((!conf ? "brez potrditve" : "") + (!conf && !trend ? " in " : "") + (!trend ? "brez trenda" : "")),
+    ev: eventsFor(c.label, c.addr).filter(function(e){ return Date.now() - e.t < 1800000; }).slice(-6).map(function(e){ return hhmm(e.t) + " " + (EVSHORT[e.st] || e.st); }),
+    row: row ? {liq: row.liq, v1: row.v1, b1: row.b1, s1: row.s1, m5: row.m5, h1: row.h1, ok: poolOk(row)} : null};
+  var vars = conf && trend ? ["A", "B", "C"] : ["B"];
+  if (!BCFG.watch) { vars.forEach(function(v){ botOpen(v, c, k.last, ctx, row, en); }); return; }
+  var now = Date.now();
+  if (BW.some(function(w){ return w.sym === c.sym && w.st === "watch"; })) return;
+  var k0 = Math.floor(now / 60000) * 60000, hz = botHist(en);
+  var w = {id: "W_" + c.sym + "_" + now, sym: c.sym, label: c.label, addr: c.addr, t: now, px0: k.last, k0: k0, kt: k0, lo: k.last, hi: k.last, n: 0, cs: [], vars: vars, ctx: ctx, en: en, row: en.row, cfg: Object.assign({}, BCFG), st: "watch", hz: hz};
+  if (hz.bad) { w.st = "reject"; w.why = hz.txt; w.t1 = now; }
+  BW.push(w); botWSave(); botRender();
 }
-function botOpen(v, c, px, ctx, row){
+var WKEY = "ct_botw", BW = (function(){ try { var a = JSON.parse(localStorage.getItem(WKEY) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } })();
+function botWSave(){ try { localStorage.setItem(WKEY, JSON.stringify(BW.slice(-80))); } catch (e) {} }
+function botHist(en){
+  var p3 = en.p3, p15 = en.p15, p1 = en.p1, f = BCFG;
+  if (!f.hist) return {bad: false, txt: "preverjanje zgodovine izklopljeno"};
+  if (p3 == null) return {bad: false, txt: "3 h ni podatka"};
+  if (!(p3 > 0)) return {bad: true, txt: "zgodovina: cena 3 h " + sgn(p3) + ", kovanec ni v rasti"};
+  if (p15 != null && p15 > p3 * f.spk / 100) return {bad: true, txt: "zgodovina: kratek skok (15 min " + sgn(p15) + " od 3 h " + sgn(p3) + ", prag " + fr(f.spk) + " %)"};
+  return {bad: false, txt: "zgodovina v redu (15 min " + sgn(p15) + ", 1 h " + sgn(p1) + ", 3 h " + sgn(p3) + ")"};
+}
+function botWEnd(w, st, why, t){ w.st = st; w.why = why; w.t1 = t || Date.now(); }
+function botWStep(w, k, fresh){
+  var cf = w.cfg, o = pf(k[1]), h = pf(k[2]), l = pf(k[3]), cl = pf(k[4]);
+  if (!(o > 0)) return;
+  w.cs.push([k[0], o, h, l, cl, pf(k[7]) || 0, pf(k[10]) || 0]); w.cs = w.cs.slice(-15);
+  w.lo = Math.min(w.lo, l); w.hi = Math.max(w.hi, h); w.n++; w.last = cl;
+  var dd = (w.lo / w.px0 - 1) * 100, up = (cl / w.px0 - 1) * 100, n = w.cs.length;
+  if (dd <= -cf.wDD) return botWEnd(w, "reject", "cena je po signalu padla " + sgn(dd) + " (prag −" + fr(cf.wDD) + " %), brez odboja", k[0] + 60000);
+  if (w.n < cf.watchMin) return;
+  var l3 = w.cs.slice(-3), qv = l3.reduce(function(a, c){ return a + c[5]; }, 0), tb = l3.reduce(function(a, c){ return a + c[6]; }, 0), sh = qv > 0 ? tb / qv : null;
+  var c1 = up >= cf.wUp, c2 = (n < 3 || cl >= w.cs[n - 3][4]) && cl >= o, c3 = sh == null || sh >= 0.5;
+  if (c1 && c2 && c3) {
+    if (!fresh) return;
+    var en = Object.assign({}, w.en, {w: {px0: w.px0, t: w.t, n: w.n, lo: dd, up: up, sh: sh, hz: w.hz && w.hz.txt}});
+    botWEnd(w, "enter", "po " + w.n + " min: cena " + sgn(up) + " od signala (najnižje " + sgn(dd) + "), zadnje 3 svečke zelene/rastoče, agresivni nakupi " + (sh == null ? "–" : Math.round(sh * 100) + " %") + " prometa", k[0] + 60000);
+    var cc = {sym: w.sym, label: w.label, addr: w.addr}, row = w.row ? {liq: w.row.liq} : null;
+    w.vars.forEach(function(v){ botOpen(v, cc, cl, w.ctx, row, en); });
+    return;
+  }
+  if (w.n >= cf.watchMax) botWEnd(w, "reject", "po " + w.n + " min ni potrditve odboja: " + [c1 ? "" : "cena " + sgn(up) + " pod pragom +" + fr(cf.wUp) + " %", c2 ? "" : "ni rastoče zelene svečke", c3 ? "" : "agresivni nakupi " + Math.round(sh * 100) + " % < 50 %"].filter(Boolean).join(", "), k[0] + 60000);
+}
+function botOpen(v, c, px, ctx, row, en){
   var now = Date.now(), mine = BST.filter(function(p){ return p.v === v; });
   if (mine.filter(function(p){ return p.st === "open"; }).length >= BCFG.maxOpen) return;
   if (mine.some(function(p){ return p.sym === c.sym && (p.st === "open" || now - (p.t1 || 0) < BCFG.cool * 60000); })) return;
   var slip = (row && row.liq > 0) ? BCFG.amt / (row.liq / 2) * 100 : 0.3, cost = BCFG.fee + slip, k0 = Math.floor(now / 60000) * 60000;
-  BST.push({id: v + "_" + c.sym + "_" + now, v: v, sym: c.sym, label: c.label, t: now, e: px, ein: px * (1 + cost / 100), cost: cost, peak: px, stop: px * (1 - BCFG.stop0 / 100), pd: false, pf: 0, pp: 0, k0: k0, kt: k0, st: "open", cfg: Object.assign({}, BCFG), ctx: ctx, last: px});
+  var rule = v === "A" ? "A: taker + potrditev + trend, trail stop (začetni stop −" + fr(BCFG.stop0) + " %, trail od +" + fr(BCFG.tStart) + " %)" : v === "B" ? "B: samo taker, trail stop (kontrola)" : "C: kot A, fiksen stop −" + fr(BCFG.stop0) + " % in cilj +" + fr(BCFG.fixTgt) + " %";
+  var e2 = Object.assign({}, en || {}, {rule: rule, slip: slip, liqSrc: row ? "Alpha seznam" : "ni podatka (privzeto 0,3 %)"});
+  BST.push({id: v + "_" + c.sym + "_" + now, v: v, sym: c.sym, label: c.label, t: now, e: px, ein: px * (1 + cost / 100), cost: cost, peak: px, stop: px * (1 - BCFG.stop0 / 100), pd: false, pf: 0, pp: 0, k0: k0, kt: k0, st: "open", cfg: Object.assign({}, BCFG), ctx: ctx, last: px, en: e2, log: [], qv: []});
   botSave(); botRender();
 }
-function botClose(p, px, why, t){
+function botClose(p, px, why, t, k){
   var q = 1 - p.cost / 100, r = function(x){ return x * q / p.ein - 1; };
   p.net = ((p.pf || 0) * r(p.pp || 0) + (1 - (p.pf || 0)) * r(px)) * 100;
   p.st = "closed"; p.x = px; p.why = why; p.t1 = t ? t + 60000 : Date.now();
+  var g = (p.peak / p.e - 1) * 100, c = null;
+  if (k) {
+    var qv = pf(k[7]) || 0, tb = pf(k[10]) || 0, prev = (p.qv || []).slice(-6, -1), av = prev.length ? prev.reduce(function(a, b){ return a + b; }, 0) / prev.length : 0;
+    c = {o: pf(k[1]), h: pf(k[2]), l: pf(k[3]), c: pf(k[4]), qv: qv, vr: av > 0 ? qv / av : null, tbr: qv > 0 ? tb / qv : null};
+  }
+  var txt = why === "stop" ? (p.tr ? "trail stop zadet: vrh " + price(p.peak) + " (" + sgn(g) + "), stop " + price(p.stop) : "začetni stop zadet (−" + fr(p.cfg.stop0) + " % od vstopa), stop " + price(p.stop)) : why === "cilj" ? "cilj +" + fr(p.cfg.fixTgt) + " % dosežen" : why === "mirovanje" ? "cena miruje: razpon zadnjih " + p.cfg.stagWin + " min pod " + fr(p.cfg.stagRng) + " %, vrh le " + sgn(g) + " (prag " + fr(p.cfg.stagGain) + " %), izstop po zadnji ceni" : why === "brez rasti" ? "po " + p.cfg.noGainMin + " min vrh le " + sgn(g) + " (prag " + fr(p.cfg.stagGain) + " %), izstop po zadnji ceni" : "čas v poziciji presežen (" + p.cfg.maxH + " h)";
+  if (why === "stop" && c && c.o < p.stop) txt += " (svečka se je odprla pod stopom, izstop po odprtju)";
+  p.ex = {t: t || null, g: g, dd: (px > 0 && p.peak > 0) ? (px / p.peak - 1) * 100 : null, tp: p.tp || null, gross: (px / p.e - 1) * 100, txt: txt, c: c, tr: !!p.tr};
+  blog(p, p.t1, "izstop: " + txt);
 }
 function botStep(p, k){
   var f = p.cfg, o = pf(k[1]), h = pf(k[2]), l = pf(k[3]), cl = pf(k[4]);
   if (!(o > 0)) return;
-  if (l <= p.stop) return botClose(p, Math.min(o, p.stop), "stop", k[0]);
-  if (h > p.peak) p.peak = h;
+  p.qv = (p.qv || []).concat([pf(k[7]) || 0]).slice(-12);
+  if (l <= p.stop) return botClose(p, Math.min(o, p.stop), "stop", k[0], k);
+  if (h > p.peak) { p.peak = h; p.tp = k[0]; }
   p.last = cl;
-  if (p.v === "C") { var tg = p.e * (1 + f.fixTgt / 100); if (h >= tg) botClose(p, tg, "cilj", k[0]); return; }
+  if (p.v === "C") { var tg = p.e * (1 + f.fixTgt / 100); if (h >= tg) botClose(p, tg, "cilj", k[0], k); else botStag(p, k, h, l, cl); return; }
   var g = (p.peak / p.e - 1) * 100;
-  if (!p.pd && g >= f.bigAt) { p.pd = true; if (f.part > 0) { p.pf = f.part / 100; p.pp = p.e * (1 + f.bigAt / 100); } }
+  if (!p.pd && g >= f.bigAt) { p.pd = true; if (f.part > 0) { p.pf = f.part / 100; p.pp = p.e * (1 + f.bigAt / 100); } blog(p, k[0], "prag velike rasti +" + fr(f.bigAt) + " %" + (f.part > 0 ? ": prodan del " + fr(f.part) + " % pozicije pri " + price(p.pp) : "")); }
   if (g >= f.tStart) {
     var d = g >= f.bigAt ? g * f.bigFac / 100 : f.tDist, ns = Math.max(p.peak * (1 - d / 100), p.e * (1 - f.stop0 / 100));
     p.stop = f.noLower ? Math.max(p.stop, ns) : ns;
+    if (!p.tr) { p.tr = 1; p.lsl = p.stop; blog(p, k[0], "trail se začne (rast +" + fr(g) + " %), stop " + price(p.stop) + " (" + sgn((p.stop / p.e - 1) * 100) + " od vstopa)"); }
+    else if (p.stop >= (p.lsl || 0) * 1.01) { p.lsl = p.stop; blog(p, k[0], "stop dvignjen na " + price(p.stop) + " (vrh " + price(p.peak) + ", razdalja " + fr(d) + " %)"); }
   }
+  botStag(p, k, h, l, cl);
+}
+function botStag(p, k, h, l, cl){
+  var f = p.cfg;
+  if (p.st !== "open" || !(f.stagWin > 0)) return;
+  p.hl = (p.hl || []).concat([[h, l]]).slice(-f.stagWin);
+  var g = (p.peak / p.e - 1) * 100;
+  if (g >= f.stagGain) return;
+  var mx = Math.max.apply(null, p.hl.map(function(a){ return a[0]; })), mn = Math.min.apply(null, p.hl.map(function(a){ return a[1]; }));
+  if (p.hl.length >= f.stagWin && cl > 0 && (mx / mn - 1) * 100 < f.stagRng) return botClose(p, cl, "mirovanje", k[0], k);
+  if (f.noGainMin > 0 && k[0] - p.t >= f.noGainMin * 60000) botClose(p, cl, "brez rasti", k[0], k);
+}
+function botLines(p){
+  var E = p.en || {}, X = p.ex || null, L = [], P = function(v){ return price(v); }, f = p.cfg || BCFG;
+  L.push("Vstop " + fdt(p.t) + ": cena " + P(p.e) + " (s stroški " + P(p.ein) + ", stroški kroga " + fr(p.cost) + " %" + (E.slip != null ? ", od tega zdrs " + fr(E.slip) + " %" : "") + ")");
+  L.push("Povod: " + (E.why || p.ctx || "ni podatka"));
+  if (E.w) L.push("Opazovanje: signal " + hhmm(E.w.t) + " pri " + P(E.w.px0) + ", " + E.w.n + " min spremljanja, najnižje " + sgn(E.w.lo) + ", ob vstopu " + sgn(E.w.up) + " od signala, agresivni nakupi " + (E.w.sh == null ? "–" : Math.round(E.w.sh * 100) + " %") + " · " + (E.w.hz || ""));
+  if (E.noAC) L.push("A in C nista odprta: " + E.noAC);
+  var m = []; [["15 min", "p15"], ["30 min", "p30"], ["1 h", "p1"], ["3 h", "p3"]].forEach(function(q){ if (E[q[1]] != null) m.push(q[0] + " " + sgn(E[q[1]])); });
+  if (E.p15 != null || E.vx != null) L.push("Trg ob vstopu: cena " + (m.join(" · ") || "–") + " · stanje 15 min: " + (E.st15 || "–") + ", 1 h: " + (E.st1 || "–") + " · OI 15 min " + sgn(E.o15) + " · vol " + fr(E.vx) + "x · taker 15 min " + fr(E.tkr) + " · L/S " + fr(E.ls) + " · funding " + (E.fu == null ? "–" : fr3(E.fu) + " %"));
+  if (E.row) L.push("Spot ob vstopu: likv. " + usd(E.row.liq) + " · promet 1 h " + usd(E.row.v1) + " · nak/prod 1 h " + E.row.b1 + ":" + E.row.s1 + " · 5 min " + sgn(E.row.m5) + " · 1 h " + sgn(E.row.h1) + (E.row.ok === false ? " · glavni bazen ni potrjen" : ""));
+  if (E.ev) L.push("Opozorila 30 min pred vstopom: " + (E.ev.length ? E.ev.join(", ") : "ni"));
+  L.push("Pravila: " + (E.rule || p.v) + " · začetni stop " + P(p.e * (1 - f.stop0 / 100)) + (p.v === "C" ? " · cilj " + P(p.e * (1 + f.fixTgt / 100)) : ""));
+  (p.log || []).forEach(function(l){ L.push("Spremljanje " + hhmm(l[0]) + ": " + l[1]); });
+  if (p.st === "open") L.push("Zdaj: cena " + P(p.last) + " (" + sgn((p.last / p.e - 1) * 100) + "), vrh " + P(p.peak) + " (" + sgn((p.peak / p.e - 1) * 100) + "), stop " + P(p.stop) + " (" + (p.tr ? "trail" : "začetni") + ")");
+  if (X) {
+    L.push("Izstop " + fdt(p.t1) + ": cena " + P(p.x) + " · razlog: " + X.txt);
+    if (X.c) L.push("Svečka izstopa " + (X.t ? hhmm(X.t) : "") + ": O " + P(X.c.o) + " H " + P(X.c.h) + " L " + P(X.c.l) + " C " + P(X.c.c) + " · promet " + usd(X.c.qv) + (X.c.vr != null ? " (" + fr(X.c.vr) + "x prejšnjih 5 min)" : "") + (X.c.tbr != null ? " · agresivni nakupi " + Math.round(X.c.tbr * 100) + " % prometa" : ""));
+    L.push("Rezultat: bruto " + sgn(X.gross) + " · neto " + sgn(p.net) + " · vrh " + sgn(X.g) + (X.tp ? " ob " + hhmm(X.tp) : "") + " · izstop " + sgn(X.dd) + " od vrha" + (p.pf ? " · delna prodaja " + Math.round(p.pf * 100) + " % pri " + P(p.pp) : "") + " · trajanje " + durTxt(p.t1 - p.t));
+  }
+  return L;
+}
+function botDetRender(){
+  var box = $("botdet");
+  if (!box) return;
+  var op = BST.filter(function(p){ return p.st === "open"; }).slice().reverse(), cl = BST.filter(function(p){ return p.st === "closed"; }).sort(function(a, b){ return b.t1 - a.t1; }).slice(0, 20), all = op.concat(cl);
+  box.innerHTML = all.length ? all.map(function(p){
+    var kk = "bd" + p.id;
+    return '<details class="sg" data-k="' + esc(kk) + '"' + (sgOpen[kk] ? ' open' : '') + '><summary><div class="top"><span><b>' + esc(p.label) + '</b> <span class="stat">' + esc(p.v + " · " + hhmm(p.t) + (p.st === "closed" ? "→" + hhmm(p.t1) + " · " + p.why : " · odprta")) + '</span></span><span>' + (p.st === "closed" ? cv(p.net) : cv((p.last / p.e - 1) * 100)) + '</span></div></summary>' +
+      '<div class="sgbody"><div class="sgi">' + botLines(p).map(function(l){ return '<small>' + esc(l) + '</small>'; }).join("") + '</div></div></details>';
+  }).join("") : '<div class="loading">Ni pozicij.</div>';
 }
 async function botTick(){
   if (botBusy || Date.now() < fBackoff) return;
-  var op = BST.filter(function(p){ return p.st === "open"; });
-  if (!op.length) { botRender(); return; }
+  var op = BST.filter(function(p){ return p.st === "open"; }), ws = BW.filter(function(w){ return w.st === "watch"; });
+  if (!op.length && !ws.length) { botRender(); return; }
   botBusy = true;
   try {
+    await pool(ws, 3, async function(w){
+      var k = await fj("/fapi/v1/klines?symbol=" + w.sym + "&interval=1m&startTime=" + w.kt + "&limit=60");
+      if (!Array.isArray(k)) return;
+      var now = Date.now();
+      for (var i = 0; i < k.length && w.st === "watch"; i++) {
+        if (k[i][0] <= w.kt || k[i][0] + 60000 > now) continue;
+        botWStep(w, k[i], k[i][0] + 60000 >= now - 120000); w.kt = k[i][0];
+      }
+      if (w.st === "watch" && now - w.t > (w.cfg.watchMax + 15) * 60000) botWEnd(w, "reject", "opazovanje je trajalo predolgo (stran je bila neaktivna)");
+    });
+    botWSave();
     await pool(op, 3, async function(p){
       var k = await fj("/fapi/v1/klines?symbol=" + p.sym + "&interval=1m&startTime=" + p.kt + "&limit=1500");
       if (!Array.isArray(k)) return;
@@ -4264,6 +4391,10 @@ function botText(){
   BST.forEach(function(p){
     s += [p.id, p.v, p.label, new Date(p.t).toLocaleString("sl-SI"), price(p.e), p.st, p.net == null ? "–" : sgn(p.net), p.why || "–", durTxt((p.t1 || Date.now()) - p.t), sgn((p.peak / p.e - 1) * 100), p.ctx, JSON.stringify(p.cfg)].join(" | ") + "\n";
   });
+  s += "\n--- Bot: opazovanje po signalu (kovanec | signal | cena signala | stanje | razlog) ---\n";
+  BW.slice(-40).forEach(function(w){ s += [w.label, new Date(w.t).toLocaleString("sl-SI"), price(w.px0), w.st === "watch" ? "opazuje (" + w.n + " min)" : w.st === "enter" ? "vstop" : "zavrnjen", w.why || (w.hz ? w.hz.txt : "")].join(" | ") + "\n"; });
+  s += "\n--- Bot: podrobnosti pozicij (vstop, povod, spremljanje, izstop) ---\n";
+  BST.slice(-60).forEach(function(p){ s += p.id + "\n" + botLines(p).map(function(l){ return "  " + l; }).join("\n") + "\n"; });
   return s;
 }
 function botRender(){
@@ -4282,6 +4413,11 @@ function botRender(){
   $("botclosed").innerHTML = cl.length ? scTbl(["Izstop", "Raz.", "Kov.", "Neto", "Razlog", "Vrh", "Trajanje"], cl.slice().sort(function(a, b){ return b.t1 - a.t1; }).slice(0, 40).map(function(p){
     return [esc(fdt(p.t1)), p.v, esc(p.label), cv(p.net), esc(p.why), cv((p.peak / p.e - 1) * 100), esc(durTxt(p.t1 - p.t))];
   })) : '<div class="loading">Še ni zaprtih pozicij.</div>';
+  var wl = $("botwatch");
+  if (wl) wl.innerHTML = BW.length ? scTbl(["Signal", "Kov.", "Cena", "Stanje", "Razlog"], BW.slice(-20).reverse().map(function(w){
+    return [esc(hhmm(w.t)), esc(w.label), esc(price(w.px0)), esc(w.st === "watch" ? "opazuje " + w.n + " min" : w.st === "enter" ? "vstop" : "zavrnjen"), '<small>' + esc(w.why || (w.hz ? w.hz.txt : "")) + '</small>'];
+  })) : '<div class="loading">Ni opazovanj.</div>';
+  botDetRender();
 }
 document.addEventListener("change", function(e){
   var t = e.target, k = t && t.getAttribute ? t.getAttribute("data-bk") : null;
@@ -4298,11 +4434,44 @@ $("botexp").addEventListener("click", function(){
 });
 $("botclr").addEventListener("click", function(){
   if (typeof confirm === "function" && !confirm("Počistim vse pozicije bota?")) return;
-  BST = []; botSave(); botRender();
+  BST = []; BW = []; botSave(); botWSave(); botRender();
+});
+function botDropLong(){
+  var n0 = BST.length;
+  BST = BST.filter(function(p){ var d = ((p.t1 || Date.now()) - p.t) / 60000, pk = (p.peak / p.e - 1) * 100; return !(d > 120 && pk < 10); });
+  return n0 - BST.length;
+}
+$("botlong").addEventListener("click", function(){
+  if (typeof confirm === "function" && !confirm("Izbrišem pozicije, ki so trajale več kot 2 h in nikoli niso zrasle 10 %?")) return;
+  var n = botDropLong(); botSave(); botRender(); $("botmsg").textContent = "Izbrisanih " + n + " pozicij.";
 });
 document.addEventListener("visibilitychange", function(){ if (document.visibilityState === "visible") botTick(); });
 setInterval(function(){ if (document.visibilityState === "visible") botTick(); }, 60000);
 setTimeout(botTick, 6000);
+function poolOk(r){ return !r.miss || (r.fixed && !r.afix); }
+var spotFillAt = 0;
+function fillSpotAuto(){ if (Date.now() - spotFillAt < 300000) return; spotFillAt = Date.now(); fillSpotVol(3).catch(function(){}); }
+async function fillSpotVol(max){
+  var L = loadLog(), cur = Math.floor(Date.now() / HMS), need = {}, n = 0;
+  Object.keys(L).forEach(function(h){ if (+h < cur - 24 || !L[h].sp) return; Object.keys(L[h].sp).forEach(function(k){ if (L[h].sp[k].u) need[k] = 1; }); });
+  var syms = Object.keys(need).slice(0, max || 4), res = {};
+  for (var i = 0; i < syms.length; i++) {
+    var sy = syms[i], r = gRows.filter(function(x){ return x.sym === sy && poolOk(x) && x.fixed && x.pool && CHAINS[x.chain]; })[0];
+    if (!r) continue;
+    try {
+      var resp = await fetch("https://api.geckoterminal.com/api/v2/networks/" + CHAINS[r.chain].gt + "/pools/" + encodeURIComponent(r.pool) + "/ohlcv/hour?aggregate=1&limit=30&include_empty_intervals=true", {prio: 2});
+      if (!resp.ok) continue;
+      var j = await resp.json(), l = j && j.data && j.data.attributes && j.data.attributes.ohlcv_list;
+      if (!l) continue;
+      var m = {}; l.forEach(function(k){ m[Math.floor(k[0] / 3600)] = k[5]; });
+      res[sy] = m;
+    } catch (e) {}
+  }
+  var L2 = loadLog();
+  Object.keys(res).forEach(function(sym){ Object.keys(L2).forEach(function(h){ var q = L2[h].sp && L2[h].sp[sym]; if (q && q.u && +h < cur && res[sym][h] != null) { q.v = Math.round(res[sym][h]); q.u = 0; q.g = 1; n++; } }); });
+  if (n) { saveLog(L2); renderLog(); }
+  return n;
+}
 function showTab(t){
   document.body.setAttribute("data-t", t);
   Array.prototype.forEach.call(document.querySelectorAll("#tabbar button"), function(b){ b.classList.toggle("on", b.getAttribute("data-t") === t); });
@@ -4414,6 +4583,16 @@ $("anapaste").addEventListener("click", async function(){
   try { var t = await navigator.clipboard.readText(); if (t) { $("anain").value = t; $("anabox").innerHTML = analyze(t); } }
   catch (e) { $("anabox").innerHTML = '<div class="msg">Brskalnik ni dovolil dostopa do odložišča. Prilepi besedilo ročno.</div>'; }
 });
+try { if (!localStorage.getItem("ct_mig3")) {
+  var cut = new Date(2026, 9, 30).getTime(), cd = "2026-10-30", pj = function(key){ try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; } };
+  var L0 = pj(LOG_KEY); if (L0) { Object.keys(L0).forEach(function(h){ if (+h * HMS < cut) delete L0[h]; }); localStorage.setItem(LOG_KEY, JSON.stringify(L0)); }
+  var D0 = pj(DAY_KEY); if (D0) { Object.keys(D0).forEach(function(d){ if (d < cd) delete D0[d]; }); localStorage.setItem(DAY_KEY, JSON.stringify(D0)); }
+  var S0 = pj(SIG_KEY); if (Array.isArray(S0)) localStorage.setItem(SIG_KEY, JSON.stringify(S0.filter(function(x){ return x.t >= cut; })));
+  var E0 = pj(EVT_KEY); if (E0) { Object.keys(E0).forEach(function(k2){ if ((E0[k2].at || 0) < cut) delete E0[k2]; }); localStorage.setItem(EVT_KEY, JSON.stringify(E0)); }
+  var C0 = pj(SCK); if (Array.isArray(C0)) localStorage.setItem(SCK, JSON.stringify(C0.filter(function(x){ return x.t >= cut; })));
+  BST = BST.filter(function(p){ return p.t >= cut; }); botDropLong(); botSave(); evtMem = null;
+  localStorage.setItem("ct_mig3", "1");
+} } catch (e) {}
 renderSigs(); renderTrend();
 try { if (!localStorage.getItem("ct_mig2")) { localStorage.removeItem(LOG_KEY); localStorage.removeItem(DAY_KEY); localStorage.setItem("ct_mig2", "1"); } } catch (e) {}
 renderTrendTop(); renderSpotTrend(); $("auto").checked = settings.auto; $("autofill").checked = settings.autoFill; renderLog(); renderLeaders(); renderHealth();
