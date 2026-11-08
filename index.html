@@ -2700,7 +2700,8 @@ function checkPxAlerts(cands){
   hits.forEach(function(h){
     var pk = PK[h.kind], w = h.c.kl.vol["15m"], oo = oiBy(h.c.oi, pk), st = stateOf(h.c.kl.px[pk], oo);
     logAlert(h.kind, pk, {label: h.c.label, sym: h.c.sym, addr: h.c.addr}, h.c.kl.last, "futures cena " + sgn(h.p) + PT[pk] + (w && w.x != null ? " · vol " + fr(w.x) + "x" : "") + (st && st.k !== "flat" ? " · " + st.s + " (OI " + sgn(oo) + ")" : ""));
-    if (BCFG.pxTrig && h.p > 0 && oo != null && oo >= 0) { try { botTrig(h.c, {x: null, ratio: h.c.rest && h.c.rest.tk ? h.c.rest.tk.r15 : null}, "futures cena " + sgn(h.p) + PT[pk] + ", OI " + sgn(oo)); } catch (e) {} }
+    if (BCFG.pxTrig && h.p > 0 && oo != null && oo <= -0.5) botSkip(h.c, "cena " + sgn(h.p) + PT[pk] + ", a OI " + sgn(oo) + " (squeeze, ne nove pozicije)");
+    if (BCFG.pxTrig && h.p > 0 && !(oo != null && oo <= -0.5)) { try { botTrig(h.c, {x: null, ratio: h.c.rest && h.c.rest.tk ? h.c.rest.tk.r15 : null}, "futures cena " + sgn(h.p) + PT[pk] + ", OI " + sgn(oo)); } catch (e) { botSkip(h.c, "napaka v botu: " + (e && e.message)); } }
   });
   alertLog = alertLog.slice(0, 10);
   renderAlerts();
@@ -4249,6 +4250,11 @@ function botTrig(c, sp, src){
   BW.push(w); botWSave(); botRender();
 }
 var WKEY = "ct_botw", BW = (function(){ try { var a = JSON.parse(localStorage.getItem(WKEY) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } })();
+function botSkip(c, txt){
+  var now = Date.now();
+  if (BW.some(function(w){ return w.sym === c.sym && now - w.t < 900000; })) return;
+  BW.push({id: "W_" + c.sym + "_" + now, sym: c.sym, label: c.label, t: now, px0: c.kl ? c.kl.last : 0, n: 0, st: "reject", why: "sprožilec zavrnjen: " + txt, t1: now}); botWSave(); botRender();
+}
 function botWSave(){ try { localStorage.setItem(WKEY, JSON.stringify(BW.slice(-80))); } catch (e) {} }
 function botHist(en){
   var p3 = en.p3, p15 = en.p15, p1 = en.p1, f = BCFG;
