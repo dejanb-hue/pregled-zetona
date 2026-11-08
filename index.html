@@ -1665,7 +1665,7 @@ async function scanAlpha(){
     buySignals();
     setStatus(rows.length + " žetonov · " + new Date().toLocaleTimeString("sl-SI"));
     if (gTab === "15m") compute15();
-    spotTrend(); hotPoll(); fillSpotAuto();
+    spotTrend(); hotPoll(); fillSpotAuto(); akScan();
   } catch (e) {
     var net = (e instanceof TypeError);
     healthSet("alphasrc", [{k: "sken", sym: "Alpha", msg: String(e && e.message || e)}]);
@@ -2065,7 +2065,53 @@ async function augmentGainers(list){
 }
 
 /* ---------- signal: nakupni pritisk (spot, Alpha) ---------- */
-function bsr(r){ return (r.s1 > 0 && r.b1 + r.s1 > 0) ? r.b1 / r.s1 : null; }
+var AKC = {}, akBusy = false;
+async function alphaTkGet(r, force){
+  if (!r || r.alphaId == null) return null;
+  var key = String(r.addr || r.sym).toLowerCase(), c = AKC[key];
+  if (c && !force && Date.now() - c.t < 45000) return c;
+  var id = String(r.alphaId);
+  if (id.indexOf("ALPHA_") !== 0) id = "ALPHA_" + id;
+  var resp = await fetch(ALPHA_KL_URL + "?symbol=" + encodeURIComponent(id + "USDT") + "&interval=1m&limit=61");
+  if (!resp.ok) return null;
+  var j = await resp.json(), d = j && j.data, nw = Date.now();
+  if (!Array.isArray(d)) return null;
+  d = d.filter(function(k){ return Number(k[0]) + 60000 <= nw; });
+  if (d.length < 6) return null;
+  var agg = function(n){
+    var v = 0, b = 0, t = 0, hb = false;
+    d.slice(-n).forEach(function(k){ v += pf(k[7]) || 0; var x = pf(k[10]); if (x != null) { b += x; hb = true; } t += Number(k[8]) || 0; });
+    return {v: v, b: hb ? b : null, s: hb ? v - b : null, n: t, sh: (hb && v > 0) ? b / v : null, r: (hb && v - b > 0) ? b / (v - b) : null};
+  };
+  var o = {t: nw, m5: agg(5), m15: agg(15), h1: agg(60)};
+  AKC[key] = o; r.ak = o; return o;
+}
+function akTxt(a){
+  if (!a) return "";
+  var f = function(x, l){ return l + " " + usd(x.v) + (x.sh != null ? ", nakupi " + Math.round(x.sh * 100) + " % (" + usd(x.b) + " : " + usd(x.s) + ")" : ", nakupi/prodaje ni podatka") + (x.n ? ", " + x.n + " poslov" : ""); };
+  return f(a.m5, "5 min") + " · " + f(a.m15, "15 min") + " · " + f(a.h1, "1 h");
+}
+async function akScan(){
+  if (akBusy || !gRows.length) return;
+  akBusy = true;
+  try {
+    var vr = visibleRows().filter(function(r){ return r.alphaId != null && r.price > 0; }), seen = {}, cand = [];
+    var by = function(k){ return vr.filter(function(r){ return r[k] != null; }).sort(function(a, b){ return b[k] - a[k]; }).slice(0, 8); };
+    by("m5").concat(by("h1")).concat(vr.slice(0, 6)).forEach(function(r){ var k = r.addr.toLowerCase(); if (!seen[k]) { seen[k] = 1; cand.push(r); } });
+    BW.filter(function(w){ return w.st === "watch"; }).concat(BST.filter(function(p){ return p.st === "open"; })).forEach(function(x){
+      var r = gRows.filter(function(g){ return g.sym === x.sym || g.sym === x.label; })[0];
+      if (r && r.addr && !seen[r.addr.toLowerCase()]) { seen[r.addr.toLowerCase()] = 1; cand.push(r); }
+    });
+    await pool(cand, 3, async function(r){ try { await alphaTkGet(r); } catch (e) {} });
+  } catch (e) {}
+  akBusy = false;
+  try { renderGainers(); } catch (e2) {}
+}
+function bsr(r){
+  var a = r.ak;
+  if (a && Date.now() - a.t < 300000 && a.h1 && a.h1.r != null && a.h1.v > 0) return a.h1.r;
+  return (r.s1 > 0 && r.b1 + r.s1 > 0) ? r.b1 / r.s1 : null;
+}
 function usdS(n){ return (n < 0 ? "−" : "+") + usd(Math.abs(n)); }
 var bsBusy = false, tradeCache = {};
 async function gtPriceAt(s, at){
@@ -3958,7 +4004,7 @@ async function spotTrend(){
 }
 function spotWhy(r){
   var p = [], q = bsr(r);
-  if (q != null) p.push("nak/prod 1 h " + fr(q) + "x (" + r.b1 + ":" + r.s1 + ")");
+  if (q != null) p.push("nak/prod 1 h " + fr(q) + "x (" + ((r.ak && Date.now() - r.ak.t < 300000 && r.ak.h1.r != null) ? "Alpha $ " + usd(r.ak.h1.b) + " : " + usd(r.ak.h1.s) : "DEX transakcije " + r.b1 + ":" + r.s1) + ")");
   p.push("promet 1 h " + usd(r.v1) + (r.jump ? " ⚡" : ""));
   p.push("likv. " + usd(r.liq));
   if (r.m5 != null) p.push("5 min " + sgn(r.m5));
@@ -4270,6 +4316,7 @@ function botTrig(c, sp, src, only){
   var en = {tk: sp.x, rt: sp.ratio, vx: vx, o15: o15, p15: p15, p30: k.px["30m"], p1: p1, p3: k.px["3h"], fu: (pr && pr.fund != null) ? pr.fund * 100 : null, ls: rs.gl ? rs.gl.now : null, tkr: rs.tk ? rs.tk.r15 : null,
     st15: s15 ? s15.s : null, st1: s1 ? s1.s : null, why: why, noAC: (conf && trend) ? "" : ((!conf ? "brez potrditve" : "") + (!conf && !trend ? " in " : "") + (!trend ? "brez trenda" : "")),
     ev: eventsFor(c.label, c.addr).filter(function(e){ return Date.now() - e.t < 1800000; }).slice(-6).map(function(e){ return hhmm(e.t) + " " + (EVSHORT[e.st] || e.st); }),
+    ak: (row && row.ak) ? row.ak : null,
     row: row ? {liq: row.liq, v1: row.v1, b1: row.b1, s1: row.s1, m5: row.m5, h1: row.h1, ok: poolOk(row)} : null};
   var vars = only ? [only] : conf && trend ? ["A", "B", "C"] : ["B"];
   if (!BCFG.watch) { vars.forEach(function(v){ botOpen(v, c, k.last, ctx, row, en); }); return; }
@@ -4280,6 +4327,7 @@ function botTrig(c, sp, src, only){
   if (hz.bad) { w.st = "reject"; w.why = hz.txt; w.t1 = now; }
   BW.push(w); botWSave(); botRender();
   getEmaAt(c.sym, now).then(function(e){ if (e) { w.en.ema = e; botWSave(); } }).catch(function(){});
+  if (row) alphaTkGet(row, true).then(function(a){ if (a) { w.en.ak = a; botWSave(); } }).catch(function(){});
 }
 var WKEY = "ct_botw", BW = (function(){ try { var a = JSON.parse(localStorage.getItem(WKEY) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } })();
 function botSkip(c, txt){
@@ -4319,6 +4367,8 @@ function botWStep(w, k, fresh){
     botWEnd(w, "enter", "po " + w.n + " min: cena " + sgn(up) + " od signala (najnižje " + sgn(dd) + "), zadnje 3 svečke zelene/rastoče, agresivni nakupi " + (sh == null ? "–" : Math.round(sh * 100) + " %") + " prometa", k[0] + 60000);
     var cc = {sym: w.sym, label: w.label, addr: w.addr}, row = w.row ? {liq: w.row.liq} : null;
     w.vars.forEach(function(v){ botOpen(v, cc, cl, w.ctx, row, en); });
+    var rw = gRows.filter(function(g){ return g.addr && w.addr && g.addr.toLowerCase() === String(w.addr).toLowerCase(); })[0];
+    if (rw) alphaTkGet(rw, true).then(function(a){ if (!a) return; BST.forEach(function(p){ if (p.sym === w.sym && p.st === "open" && p.en && !p.en.ak2 && Date.now() - p.t < 60000) p.en.ak2 = a; }); botSave(); }).catch(function(){});
     return;
   }
   if (w.n >= cf.watchMax) botWEnd(w, "reject", "po " + w.n + " min ni potrditve odboja: " + [c1 ? "" : "cena " + sgn(up) + " pod pragom +" + fr(cf.wUp) + " %", c2 ? "" : "ni rastoče zelene svečke", c3 ? "" : "agresivni nakupi " + Math.round(sh * 100) + " % < 50 %", (c1 && c2 && c3 && !hzOk) ? "dodatna potrditev manjka (" + (w.hz && w.hz.txt || "") + ")" : ""].filter(Boolean).join(", "), k[0] + 60000);
@@ -4456,7 +4506,9 @@ function botLines(p){
   if (E.noAC) L.push("A in C nista odprta: " + E.noAC);
   var m = []; [["15 min", "p15"], ["30 min", "p30"], ["1 h", "p1"], ["3 h", "p3"]].forEach(function(q){ if (E[q[1]] != null) m.push(q[0] + " " + sgn(E[q[1]])); });
   if (E.p15 != null || E.vx != null) L.push("Trg ob vstopu: cena " + (m.join(" · ") || "–") + " · stanje 15 min: " + (E.st15 || "–") + ", 1 h: " + (E.st1 || "–") + " · OI 15 min " + sgn(E.o15) + " · vol " + fr(E.vx) + "x · taker 15 min " + fr(E.tkr) + " · L/S " + fr(E.ls) + " · funding " + (E.fu == null ? "–" : fr3(E.fu) + " %"));
-  if (E.row) L.push("Spot ob vstopu: likv. " + usd(E.row.liq) + " · promet 1 h " + usd(E.row.v1) + " · nak/prod 1 h " + E.row.b1 + ":" + E.row.s1 + " · 5 min " + sgn(E.row.m5) + " · 1 h " + sgn(E.row.h1) + (E.row.ok === false ? " · glavni bazen ni potrjen" : ""));
+  if (E.ak) L.push("Spot Alpha ob signalu (svečke 1 min, $): " + akTxt(E.ak));
+  if (E.ak2) L.push("Spot Alpha ob vstopu (svečke 1 min, $): " + akTxt(E.ak2));
+  if (E.row) L.push("Spot ob vstopu: likv. " + usd(E.row.liq) + " · promet 1 h " + usd(E.row.v1) + " · DEX transakcije nak/prod 1 h " + E.row.b1 + ":" + E.row.s1 + " · 5 min " + sgn(E.row.m5) + " · 1 h " + sgn(E.row.h1) + (E.row.ok === false ? " · glavni bazen ni potrjen" : ""));
   if (E.ev) L.push("Opozorila 30 min pred vstopom: " + (E.ev.length ? E.ev.join(", ") : "ni"));
   L.push("Pravila: " + (E.rule || p.v) + " · začetni stop " + P(p.e * (1 - botS0p(p) / 100)) + (p.v === "C" ? " · cilj " + P(p.e * (1 + f.fixTgt / 100)) : ""));
   (p.log || []).forEach(function(l){ L.push("Spremljanje " + hhmm(l[0]) + ": " + l[1]); });
