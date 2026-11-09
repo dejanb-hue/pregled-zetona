@@ -4688,7 +4688,7 @@ document.addEventListener("change", function(e){
   var t = e.target, k = t && t.getAttribute ? t.getAttribute("data-bk") : null;
   if (!k || !(k in BDEF)) return;
   var v = typeof BDEF[k] === "boolean" ? t.checked : num(String(t.value).replace(",", "."));
-  if (v == null || (typeof v === "number" && v < 0)) { t.value = BCFG[k]; return; }
+  if (v == null || (typeof v === "number" && v < 0 && ["h3Rej", "trOi", "eOi", "eP15"].indexOf(k) < 0)) { t.value = BCFG[k]; return; }
   BCFG[k] = v; try { localStorage.setItem(BCK, JSON.stringify(BCFG)); } catch (e2) {}
   $("botmsg").textContent = "Shranjeno. Velja za nove pozicije.";
 });
