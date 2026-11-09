@@ -196,6 +196,10 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
       <span class="stat" id="gstatus"></span>
     </div>
   </div>
+  <h2>Celoten izvoz in uvoz<span class="info" role="button" tabindex="0" data-info="sec_allio" aria-label="Razlaga">ⓘ</span></h2>
+  <p class="note">Vsi podatki te naprave v eni datoteki (mapa Prenosi). Za prenos na drugo napravo ali za analizo v klepetu.</p>
+  <div class="row" style="flex-wrap:wrap"><button class="ghost small" id="allexp">Celoten izvoz (datoteka)</button><button class="ghost small" id="allimp">Celoten uvoz (datoteka)</button><input type="file" id="allin" accept=".json,application/json,text/plain" hidden></div>
+  <div class="stat" id="allmsg" style="margin-top:6px"></div>
 
   </div><div data-tab="spot">
   <h2>Futures · Binance<span class="info" role="button" tabindex="0" data-info="sec_futures" aria-label="Razlaga">ⓘ</span></h2>
@@ -218,6 +222,8 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="card" id="sigbox" style="overflow-x:auto"></div>
   <div class="row" style="margin-top:8px"><button class="ghost small" id="sigcheck">Preveri izide</button><button class="ghost small" id="sigclear">Počisti zgodovino</button></div>
   <div class="row" style="margin-top:8px"><button class="ghost small" id="sigexp">Izvozi</button><button class="ghost small" id="sigimp">Uvozi</button></div>
+  <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="ghost small" id="sigfile">Izvozi v datoteko</button><button class="ghost small" id="sigfileimp">Uvozi iz datoteke</button><input type="file" id="sigfilein" accept=".json,.txt,application/json,text/plain" hidden></div>
+  <div class="stat" id="sigfilemsg" style="margin-top:6px"></div>
   <div class="card" id="iobox" hidden style="padding:12px;margin-top:8px">
     <textarea id="iotext" rows="6" spellcheck="false" autocapitalize="off" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px;font:12px/1.4 monospace"></textarea>
     <div class="row" style="margin-top:8px"><button class="small" id="iocopy">Kopiraj</button><button class="small" id="iodo" hidden>Uvozi</button><button class="ghost small" id="ioclose">Zapri</button></div>
@@ -280,6 +286,7 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <input id="twin" type="text" autocomplete="off" spellcheck="false" placeholder="Čas, ki te zanima, npr. 04:25-06:15" aria-label="Časovno okno" style="width:100%;margin-top:8px">
   <div id="out" aria-live="polite"></div>
   <div class="row" style="margin-top:12px;flex-wrap:wrap"><button class="ghost small" id="cpcoin">Kopiraj: podatki žetona</button><button class="ghost small" id="cpother">Kopiraj: ostali podatki</button></div>
+  <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="ghost small" id="flcoin">Datoteka: podatki žetona</button><button class="ghost small" id="flother">Datoteka: ostali podatki</button></div>
   <div class="stat" id="cpmsg" style="margin-top:6px"></div>
 
   <h2 id="wlh" hidden>Moj seznam<span class="info" role="button" tabindex="0" data-info="sec_watch" aria-label="Razlaga">ⓘ</span></h2>
@@ -290,7 +297,7 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <h2>Papirnati bot<span class="info" role="button" tabindex="0" data-info="sec_bot" aria-label="Razlaga">ⓘ</span></h2>
   <p class="note">Samo beleži, nič se ne izvede. Nove pozicije dobijo trenutne nastavitve, odprte ohranijo tiste iz trenutka vstopa. Sprožilci delujejo ob odprti strani in vklopljenem samodejnem osveževanju, pozicije se poračunajo iz 1-min svečk Binance Futures (cena futures je približek spot cene).</p>
   <div class="card settings" id="botset"></div>
-  <div class="row" style="margin-top:8px"><button class="ghost small" id="botrun">Osveži</button><button class="ghost small" id="botexp">Kopiraj zapise</button><button class="ghost small" id="botlong">Počisti dolge</button><button class="ghost small" id="botclr">Počisti</button></div>
+  <div class="row" style="margin-top:8px"><button class="ghost small" id="botrun">Osveži</button><button class="ghost small" id="botexp">Kopiraj zapise</button><button class="ghost small" id="botfile">Datoteka</button><button class="ghost small" id="botlong">Počisti dolge</button><button class="ghost small" id="botclr">Počisti</button></div>
   <div class="stat" id="botmsg" style="margin-top:6px"></div>
   <h2>Povzetek po različicah</h2><div class="card" id="botsum" style="overflow-x:auto"></div>
   <h2>Opazovanje po signalu</h2><div class="card" id="botwatch" style="overflow-x:auto"></div>
@@ -303,7 +310,7 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <h2>Analiza podatkov<span class="info" role="button" tabindex="0" data-info="sec_ana" aria-label="Razlaga">ⓘ</span></h2>
   <p class="note">Prilepi besedilo iz gumba »Kopiraj: ostali podatki« (zavihek Žeton) in tapni Analiziraj. Izračun poteka v tej napravi.</p>
   <textarea id="anain" rows="5" spellcheck="false" autocapitalize="off" style="width:100%;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:8px;font:12px/1.4 monospace"></textarea>
-  <div class="row" style="margin-top:8px"><button class="small" id="anapaste">Prilepi</button><button class="small" id="anago">Analiziraj</button><button class="ghost small" id="anaclr">Počisti</button></div>
+  <div class="row" style="margin-top:8px"><button class="small" id="anapaste">Prilepi</button><button class="small" id="anafile">Iz datoteke</button><input type="file" id="anafilein" accept=".txt,text/plain" hidden><button class="small" id="anago">Analiziraj</button><button class="ghost small" id="anaclr">Počisti</button></div>
   <div id="anabox"></div>
   </div>
   <p class="tiny">Samo informativno, ni finančno svetovanje. Prikazani pragovi so splošna pravila, ne jamstvo. Podatki so lahko zamaknjeni ali nepopolni, zato vedno preveri tudi sam.</p>
@@ -419,9 +426,10 @@ function esc(s){
 var ABBR = "sq squeeze · nl nove pozicije · ns novi shorti · lq likvidacije · bp nakupni pritisk · ⚑5m cena 5 min (spot) · ⚑5m↓ padec cene 5 min (spot) · ⚑OI skok OI · ⚑tk skok takerja · ⚑15m futures cena 15 min · ⚑30m cena 30 min · ⚑1h futures cena 1 h · ⚡ skok prometa";
 var INFO = {
   sec_gainers: ["Največji rastoči · Binance Alpha", "Seznam Alpha žetonov z Binance, cene in spremembe z DEXScreenerja. Razvrščeno po spremembi cene v izbranem obdobju.\nSprememba cene je z glavnega para (največ likvidnosti), likvidnost in promet 24 h sta seštevek vseh parov žetona.\n15 min Binance ne ponuja, zato ga izračunam iz minutnih svečk Binance Alpha, in to samo za do 24 kandidatov z najvišjo rastjo v 5 min in 1 uri. Žeton izven teh kandidatov se v 15-min seznamu ne more pojaviti.\nOranžna likvidnost = pod $50K, izstop je težak. Odstotki: 5 min in 1 h sta priceChange glavnega para z DEXScreenerja. 15 min je izračun iz Binance Alpha minutnih svečk (zaprtje zadnje proti odprtju pred 15 min, drseče okno). Seznam vključuje samo žetone, ki so skozi filter: promet 24 h ≥ $2M in 1 h ≥ $100K (ali skok prometa) ter najmanjša likvidnost iz nastavitev.\nVrstica »Futures« pod žetonom pokaže, ali ima kovanec futures par in kaj se tam dogaja."],
+  sec_allio: ["Celoten izvoz in uvoz", "Celoten izvoz shrani vse podatke te naprave v eno datoteko .json: signale in opozorila z izidi, dnevnik, dnevne povzetke, posnetke, Moj seznam, bota (pozicije, opazovanje, nastavitve), nastavitve strani, zdravje podatkov, zgodovino skenov, zbrana trgovanja in zajeme ob dogodkih. Dodano je še besedilo »ostali podatki« za branje.\nCeloten uvoz doda manjkajoče zapise, obstoječi ostanejo: signali, dnevnik, posnetki, Moj seznam ter zaprte pozicije in zavrnjeni signali bota (podvojeni se preskočijo). Nastavitve se uvozijo samo, če to potrdiš, tema ntfy ostane tvoja. Zdravje podatkov, skeni, trgovanja in EMA se ne uvozijo, ker opisujejo drugo napravo.\nUvozi se tudi starejša datoteka iz gumba Izvozi v datoteko (Signali)."],
   sec_settings: ["Nastavitve in opozorila", "Nastavitve se shranijo v brskalnik te naprave. Opozorila (rast cene, skok OI, taker promet, novi signali) delujejo samo ob vklopljenem samodejnem osveževanju in odprti strani. Zvok in vibracija se sprožita ob vsakem opozorilu, isti kovanec se ne javi znova 15 minut."],
   sec_futures: ["Futures · Binance", "Javni podatki Binance Futures. Pregleda do 40 kovancev: pri »Alpha z futures« tiste Alpha žetone, ki imajo futures par (povezava po simbolu in ceni, 1000PEPE velja za PEPE), pri »Vsi futures« 30 največjih po prometu in 15 največjih gibalcev.\nZa izbrano obdobje (15 min, 1 ura, 3 ure) izračuna rast futures prometa, spremembo OI v količini in spremembo cene iz svečk.\nOdstotki: cena = zadnja cena proti zaprtju 5-min svečke 3 (15 min), 12 (1 ura) ali 36 (3 ure) svečk nazaj, zato je okno 15 do 20 min (tekoča svečka je vključena). OI = sprememba količine pogodb. Rast volumna = promet zadnjega okna proti enako dolgemu prejšnjemu. Kovanci s futures prometom 24 h nad $50M so vključeni tudi pri majhnem spot prometu.\nPrikaže do 10 kovancev, ki izpolnjujejo pogoje iz nastavitev, razvrščenih po rasti volumna. Ni napoved cene."],
-  sec_signals: ["Beleženje signalov", "Signal = kovanec je v 15-min ali 1-urnem oknu hkrati presegel prag rasti volumna in spremembe OI (nastavitve) in ima jasno stanje (ne »brez signala«). Največ en signal na kovanec in okno na uro.\nIzid = sprememba futures cene od trenutka signala po 15 min, 1 h in 3 h, brez provizij in zdrsa. Izidi se dopolnijo tudi, ko je bila stran zaprta.\nTapni skupino ali signal za podrobnosti (kovanec, cena, OI, volumen, funding). Shranjeno v brskalniku te naprave. Majhen vzorec ni dokaz.\nSignal »nakupni pritisk« velja za Alpha žetone (tudi brez futures): število nakupov proti prodajam v 1 uri in dolarji iz zadnjih trgovanj (nastavitve). Izid je sprememba cene z DEXScreenerja po 15 min, 1 h in 3 h (iz svečk GeckoTerminal)."],
+  sec_signals: ["Beleženje signalov", "Signal = kovanec je v 15-min ali 1-urnem oknu hkrati presegel prag rasti volumna in spremembe OI (nastavitve) in ima jasno stanje (ne »brez signala«). Največ en signal na kovanec in okno na uro.\nIzid = sprememba futures cene od trenutka signala po 15 min, 1 h in 3 h, brez provizij in zdrsa. Izidi se dopolnijo tudi, ko je bila stran zaprta.\nTapni skupino ali signal za podrobnosti (kovanec, cena, OI, volumen, funding). Shranjeno v brskalniku te naprave. Majhen vzorec ni dokaz.\nIzvozi v datoteko shrani signale, Moj seznam, posnetke in dnevnik v datoteko .json (mapa Prenosi), Uvozi iz datoteke jih doda na drugi napravi; obstoječi zapisi ostanejo. Bota in nastavitev izvoz ne vsebuje.\nSignal »nakupni pritisk« velja za Alpha žetone (tudi brez futures): število nakupov proti prodajam v 1 uri in dolarji iz zadnjih trgovanj (nastavitve). Izid je sprememba cene z DEXScreenerja po 15 min, 1 h in 3 h (iz svečk GeckoTerminal)."],
   sec_trend: ["Trend zadnja ura", "Posnetki futures podatkov (cena, OI v količini, promet, taker, L/S, funding) se shranijo ob osveževanju futures panela, največ enkrat na 5 min na kovanec, in se hranijo 24 h v tej napravi. Vsak stolpec kaže 15-min obdobje do navedene ure. Taker in L/S sta samo za kovance, ki so bili v top 10 panela. Posnetki se zapisujejo samo, ko je stran odprta."],
   sec_log: ["Dnevnik", "Stolpci: Ura = začetek ure. Kov. = kovanci z rastjo prometa nad pragom. Sig. in Opoz. = število signalov in opozoril v uri. Cena = mediana urne spremembe cene kovancev. Promet = futures promet. OI = velikost OI v $. Spot = mediana urne spremembe spot cene. Spot prom. = spot promet 1 h. Skeni = število osveževanj v uri (rumeno = luknja, zap. = zapolnjeno iz Binance svečk). Pod vrstico so kovanci z rastjo prometa (x) in urno spremembo cene.\nVsako osveževanje futures panela se zapiše v urni zapis (cena, promet, OI, rast volumna po kovancih). Hrani se 7 dni, dnevni povzetki ostanejo.\nZapolni luknje: za zadnjih 24 h, kjer je bilo skenov manj kot 10, povleče 5-min svečke in OI zgodovino z Binance za do 40 kovancev. Signalov ne ustvarja nazaj.\nPovzetek dneva: kovanci z rastjo volumna, signali (brez dvojnikov 15 min/1 h), mediana urne spremembe cene, skupen promet, zadnji OI in 3 ure z največ prometa."],
   sec_check: ["Preveri žeton", "Prilepi naslov pogodbe. DEXScreener najde pare in izbere tistega z največ likvidnosti, veriga se zazna sama. Viri: DEXScreener (cene, likvidnost, promet), GoPlus (varnost pogodbe, EVM), GeckoTerminal (svečke in zadnja trgovanja). Pregled ni napoved cene."],
@@ -3127,7 +3135,7 @@ function ioShow(mode){
   $("iomsg").textContent = "";
   if (mode === "exp") {
     var sg = loadSigs(), wt = loadWatch();
-    ta.value = JSON.stringify({v: 1, sig: sg, watch: wt, hist: loadHist(), log: loadLog(), days: loadDays()});
+    ta.value = exportData();
     ta.readOnly = true;
     $("iocopy").hidden = false; $("iodo").hidden = true;
     $("iomsg").textContent = "Izvoženo: " + sigWord(sg.length) + " in " + wt.length + " v seznamu. Tapni Kopiraj in besedilo shrani (npr. v zapiske).";
@@ -3473,6 +3481,7 @@ $("cpcoin").addEventListener("click", async function(){
   copyText(t, "Kopirano: podatki žetona + futures");
 });
 $("cpother").addEventListener("click", function(){ copyText(otherText(), "Kopirano: ostali podatki"); });
+
 $("twin").addEventListener("input", updateWarn);
 loadSettings();
 $("thr").value = settings.thr;
@@ -4953,6 +4962,112 @@ try {
   if (last) $("addr").value = last;
 } catch (e) {}
 renderWatch();
+/* ---------- datoteke: shrani in odpri (za prenos med napravami) ---------- */
+function exportData(){ return JSON.stringify({v: 1, sig: loadSigs(), watch: loadWatch(), hist: loadHist(), log: loadLog(), days: loadDays()}); }
+function devTag(){ return /tablica/i.test(location.pathname) ? "tablica" : "glavna"; }
+function fileStamp(){ var d = new Date(); return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) + "_" + p2(d.getHours()) + p2(d.getMinutes()); }
+function saveFile(base, ext, text, el){
+  var name = base + "_" + devTag() + "_" + fileStamp() + "." + ext;
+  try {
+    var blob = new Blob([text], {type: (ext === "json" ? "application/json" : "text/plain") + ";charset=utf-8"});
+    var u = URL.createObjectURL(blob), a = document.createElement("a");
+    a.href = u; a.download = name; a.style.display = "none";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(u); }, 60000);
+    if (el) el.textContent = "Shranjeno: " + name + " (" + Math.round(text.length / 1000) + " K znakov). Najdeš jo v mapi Prenosi.";
+  } catch (e) { if (el) el.textContent = "Shranjevanje ni uspelo: " + (e && e.message || e); }
+}
+function readFile(input, cb, el){
+  var f = input.files && input.files[0];
+  input.value = "";
+  if (!f) return;
+  if (el) el.textContent = "Berem " + f.name + "…";
+  var r = new FileReader();
+  r.onload = function(){ cb(String(r.result || ""), f.name); };
+  r.onerror = function(){ if (el) el.textContent = "Datoteke ni bilo mogoče prebrati."; };
+  r.readAsText(f);
+}
+async function coinFull(){
+  if (lastAddr && Date.now() - lastRunAt > 180000) { $("cpmsg").textContent = "Pregled je star, osvežujem…"; await freshRun(); }
+  var t = coinText();
+  if (!t) { $("cpmsg").textContent = "Najprej preveri žeton."; return null; }
+  $("cpmsg").textContent = "Zbiram futures podatke…";
+  return t + await futText();
+}
+$("flcoin").addEventListener("click", async function(){
+  var t = await coinFull();
+  if (t) saveFile("zeton-" + String($("out").dataset.sym || "x").replace(/[^A-Za-z0-9]/g, ""), "txt", t, $("cpmsg"));
+});
+$("flother").addEventListener("click", function(){ saveFile("ostali-podatki", "txt", otherText(), $("cpmsg")); });
+$("botfile").addEventListener("click", function(){ saveFile("bot", "txt", botText(), $("botmsg")); });
+$("sigfile").addEventListener("click", function(){ saveFile("izvoz", "json", exportData(), $("sigfilemsg")); });
+$("sigfileimp").addEventListener("click", function(){ $("sigfilein").click(); });
+$("sigfilein").addEventListener("change", function(){
+  readFile(this, function(t, nm){
+    ioShow("imp"); $("iotext").value = t; ioImport();
+    $("sigfilemsg").textContent = "Iz datoteke " + nm + ": " + $("iomsg").textContent;
+  }, $("sigfilemsg"));
+});
+/* ---------- celoten izvoz in uvoz ---------- */
+function allExport(){
+  if (typeof lsFlush === "function") lsFlush();
+  var data = {};
+  for (var i = 0; i < localStorage.length; i++) {
+    var k = localStorage.key(i);
+    if (!k || k.indexOf("ct_") !== 0) continue;
+    var raw = localStorage.getItem(k), v;
+    try { v = JSON.parse(raw); } catch (e) { v = raw; }
+    data[k] = v;
+  }
+  var txt = "";
+  try { txt = otherText(); } catch (e2) { txt = "ni bilo mogoče sestaviti: " + (e2 && e2.message); }
+  return JSON.stringify({v: 2, app: "pregled-zetona", dev: devTag(), t: Date.now(), cas: new Date().toLocaleString("sl-SI"), ver: typeof APP_VER === "string" ? APP_VER : "glavna", data: data, text: txt});
+}
+function botMerge(cur, inc, skipOpen){
+  var ids = {}, add = 0;
+  cur.forEach(function(p){ ids[p.id] = 1; });
+  (Array.isArray(inc) ? inc : []).forEach(function(p){
+    if (!p || !p.id || ids[p.id] || !isFinite(p.t)) return;
+    if (skipOpen && (p.st === "open" || p.st === "watch")) return;
+    if (cur.some(function(q){ return q.sym === p.sym && (q.v || "") === (p.v || "") && Math.abs(q.t - p.t) < 600000; })) return;
+    cur.push(p); ids[p.id] = 1; add++;
+  });
+  cur.sort(function(a, b){ return a.t - b.t; });
+  return add;
+}
+function allImport(text, name){
+  var msg = $("allmsg"), o;
+  try { o = JSON.parse(text); } catch (e) { msg.textContent = "Datoteka ni veljaven izvoz."; return; }
+  if (!o || typeof o !== "object") { msg.textContent = "Datoteka ni veljaven izvoz."; return; }
+  var d = (o.v === 2 && o.data) ? o.data : null;
+  var base = d ? {v: 1, sig: d.ct_sig || [], watch: d.ct_watch || [], hist: d.ct_hist || {}, log: d.ct_log || {}, days: d.ct_days || {}} : o;
+  ioShow("imp"); $("iotext").value = JSON.stringify(base); ioImport();
+  var parts = [$("iomsg").textContent];
+  if (d) {
+    var nb = botMerge(BST, d.ct_bot, true), nw = botMerge(BW, d.ct_botw, true);
+    BST = BST.slice(-600); BW = BW.slice(-80);
+    botSave(); botWSave(); try { botRender(); } catch (e3) {}
+    parts.push("Bot: " + nb + " zaprtih pozicij in " + nw + " zapisov opazovanja.");
+    if ((d.ct_set || d.ct_botcfg) && typeof confirm === "function" && confirm("Uvozim tudi nastavitve strani in bota iz datoteke? Tema ntfy ostane tvoja. Stran se bo nato znova naložila.")) {
+      try {
+        if (d.ct_set && typeof d.ct_set === "object") { var s = Object.assign({}, d.ct_set); s.ntfy = settings.ntfy; localStorage.setItem("ct_set", JSON.stringify(s)); }
+        if (d.ct_botcfg && typeof d.ct_botcfg === "object") localStorage.setItem(BCK, JSON.stringify(d.ct_botcfg));
+      } catch (e4) {}
+      if (typeof lsFlush === "function") lsFlush();
+      msg.textContent = "Iz " + name + ": " + parts.join(" ") + " Nastavitve uvožene, stran se znova nalaga…";
+      setTimeout(function(){ location.reload(); }, 1500);
+      return;
+    }
+  }
+  msg.textContent = "Iz " + name + (o.dev ? " (" + o.dev + (o.cas ? ", " + o.cas : "") + ")" : "") + ": " + parts.join(" ");
+}
+$("allexp").addEventListener("click", function(){ $("allmsg").textContent = "Zbiram…"; setTimeout(function(){ saveFile("celoten-izvoz", "json", allExport(), $("allmsg")); }, 30); });
+$("allimp").addEventListener("click", function(){ $("allin").click(); });
+$("allin").addEventListener("change", function(){ readFile(this, allImport, $("allmsg")); });
+$("anafile").addEventListener("click", function(){ $("anafilein").click(); });
+$("anafilein").addEventListener("change", function(){
+  readFile(this, function(t){ $("anain").value = t; $("anabox").innerHTML = analyze(t); }, null);
+});
 })();
 </script>
 </body>
