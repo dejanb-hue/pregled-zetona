@@ -332,6 +332,7 @@ var CHAINS = {
 };
 
 var $ = function(id){return document.getElementById(id);};
+var ARCH_DAYS = 7, archDb = null, archBusy = false, ARCH = {n: null, moved: 0, at: 0, err: ""};
 /* ---------- shramba: podatki v pomnilniku, zapis na disk z zamikom (različica za šibkejše naprave) ---------- */
 var APP_VER = "2026-11-09 · shramba v pomnilniku + merilnik odzivnosti";
 var LSC = {}, LSD = {}, LSQ = {}, LSZ = {}, lsTimer = null, LS_DELAY = 15000;
@@ -426,10 +427,10 @@ function esc(s){
 var ABBR = "sq squeeze · nl nove pozicije · ns novi shorti · lq likvidacije · bp nakupni pritisk · ⚑5m cena 5 min (spot) · ⚑5m↓ padec cene 5 min (spot) · ⚑OI skok OI · ⚑tk skok takerja · ⚑15m futures cena 15 min · ⚑30m cena 30 min · ⚑1h futures cena 1 h · ⚡ skok prometa";
 var INFO = {
   sec_gainers: ["Največji rastoči · Binance Alpha", "Seznam Alpha žetonov z Binance, cene in spremembe z DEXScreenerja. Razvrščeno po spremembi cene v izbranem obdobju.\nSprememba cene je z glavnega para (največ likvidnosti), likvidnost in promet 24 h sta seštevek vseh parov žetona.\n15 min Binance ne ponuja, zato ga izračunam iz minutnih svečk Binance Alpha, in to samo za do 24 kandidatov z najvišjo rastjo v 5 min in 1 uri. Žeton izven teh kandidatov se v 15-min seznamu ne more pojaviti.\nOranžna likvidnost = pod $50K, izstop je težak. Odstotki: 5 min in 1 h sta priceChange glavnega para z DEXScreenerja. 15 min je izračun iz Binance Alpha minutnih svečk (zaprtje zadnje proti odprtju pred 15 min, drseče okno). Seznam vključuje samo žetone, ki so skozi filter: promet 24 h ≥ $2M in 1 h ≥ $100K (ali skok prometa) ter najmanjša likvidnost iz nastavitev.\nVrstica »Futures« pod žetonom pokaže, ali ima kovanec futures par in kaj se tam dogaja."],
-  sec_allio: ["Celoten izvoz in uvoz", "Celoten izvoz shrani vse podatke te naprave v eno datoteko .json: signale in opozorila z izidi, dnevnik, dnevne povzetke, posnetke, Moj seznam, bota (pozicije, opazovanje, nastavitve), nastavitve strani, zdravje podatkov, zgodovino skenov, zbrana trgovanja in zajeme ob dogodkih. Dodano je še besedilo »ostali podatki« za branje.\nCeloten uvoz doda manjkajoče zapise, obstoječi ostanejo: signali, dnevnik, posnetki, Moj seznam ter zaprte pozicije in zavrnjeni signali bota (podvojeni se preskočijo). Nastavitve se uvozijo samo, če to potrdiš, tema ntfy ostane tvoja. Zdravje podatkov, skeni, trgovanja in EMA se ne uvozijo, ker opisujejo drugo napravo.\nUvozi se tudi starejša datoteka iz gumba Izvozi v datoteko (Signali)."],
+  sec_allio: ["Celoten izvoz in uvoz", "Celoten izvoz shrani vse podatke te naprave v eno datoteko .json: signale in opozorila z izidi, dnevnik, dnevne povzetke, posnetke, Moj seznam, bota (pozicije, opazovanje, nastavitve), nastavitve strani, zdravje podatkov, zgodovino skenov, zbrana trgovanja in zajeme ob dogodkih. Dodana sta arhiv signalov (starejših od 7 dni) in besedilo »ostali podatki« z arhivom za branje.\nCeloten uvoz doda manjkajoče zapise, obstoječi ostanejo: signali, dnevnik, posnetki, Moj seznam ter zaprte pozicije in zavrnjeni signali bota (podvojeni se preskočijo). Nastavitve se uvozijo samo, če to potrdiš, tema ntfy ostane tvoja. Zdravje podatkov, skeni, trgovanja in EMA se ne uvozijo, ker opisujejo drugo napravo.\nUvozi se tudi starejša datoteka iz gumba Izvozi v datoteko (Signali)."],
   sec_settings: ["Nastavitve in opozorila", "Nastavitve se shranijo v brskalnik te naprave. Opozorila (rast cene, skok OI, taker promet, novi signali) delujejo samo ob vklopljenem samodejnem osveževanju in odprti strani. Zvok in vibracija se sprožita ob vsakem opozorilu, isti kovanec se ne javi znova 15 minut."],
   sec_futures: ["Futures · Binance", "Javni podatki Binance Futures. Pregleda do 40 kovancev: pri »Alpha z futures« tiste Alpha žetone, ki imajo futures par (povezava po simbolu in ceni, 1000PEPE velja za PEPE), pri »Vsi futures« 30 največjih po prometu in 15 največjih gibalcev.\nZa izbrano obdobje (15 min, 1 ura, 3 ure) izračuna rast futures prometa, spremembo OI v količini in spremembo cene iz svečk.\nOdstotki: cena = zadnja cena proti zaprtju 5-min svečke 3 (15 min), 12 (1 ura) ali 36 (3 ure) svečk nazaj, zato je okno 15 do 20 min (tekoča svečka je vključena). OI = sprememba količine pogodb. Rast volumna = promet zadnjega okna proti enako dolgemu prejšnjemu. Kovanci s futures prometom 24 h nad $50M so vključeni tudi pri majhnem spot prometu.\nPrikaže do 10 kovancev, ki izpolnjujejo pogoje iz nastavitev, razvrščenih po rasti volumna. Ni napoved cene."],
-  sec_signals: ["Beleženje signalov", "Signal = kovanec je v 15-min ali 1-urnem oknu hkrati presegel prag rasti volumna in spremembe OI (nastavitve) in ima jasno stanje (ne »brez signala«). Največ en signal na kovanec in okno na uro.\nIzid = sprememba futures cene od trenutka signala po 15 min, 1 h in 3 h, brez provizij in zdrsa. Izidi se dopolnijo tudi, ko je bila stran zaprta.\nTapni skupino ali signal za podrobnosti (kovanec, cena, OI, volumen, funding). Shranjeno v brskalniku te naprave. Majhen vzorec ni dokaz.\nIzvozi v datoteko shrani signale, Moj seznam, posnetke in dnevnik v datoteko .json (mapa Prenosi), Uvozi iz datoteke jih doda na drugi napravi; obstoječi zapisi ostanejo. Bota in nastavitev izvoz ne vsebuje.\nSignal »nakupni pritisk« velja za Alpha žetone (tudi brez futures): število nakupov proti prodajam v 1 uri in dolarji iz zadnjih trgovanj (nastavitve). Izid je sprememba cene z DEXScreenerja po 15 min, 1 h in 3 h (iz svečk GeckoTerminal)."],
+  sec_signals: ["Beleženje signalov", "Signal = kovanec je v 15-min ali 1-urnem oknu hkrati presegel prag rasti volumna in spremembe OI (nastavitve) in ima jasno stanje (ne »brez signala«). Največ en signal na kovanec in okno na uro.\nIzid = sprememba futures cene od trenutka signala po 15 min, 1 h in 3 h, brez provizij in zdrsa. Izidi se dopolnijo tudi, ko je bila stran zaprta.\nTapni skupino ali signal za podrobnosti (kovanec, cena, OI, volumen, funding). Shranjeno v brskalniku te naprave. Majhen vzorec ni dokaz.\nSignali, starejši od 7 dni, so v arhivu (glej Zdravje podatkov), ne izbrišejo se. Izvozi v datoteko shrani signale, Moj seznam, posnetke in dnevnik v datoteko .json (mapa Prenosi), Uvozi iz datoteke jih doda na drugi napravi; obstoječi zapisi ostanejo. Bota in nastavitev izvoz ne vsebuje.\nSignal »nakupni pritisk« velja za Alpha žetone (tudi brez futures): število nakupov proti prodajam v 1 uri in dolarji iz zadnjih trgovanj (nastavitve). Izid je sprememba cene z DEXScreenerja po 15 min, 1 h in 3 h (iz svečk GeckoTerminal)."],
   sec_trend: ["Trend zadnja ura", "Posnetki futures podatkov (cena, OI v količini, promet, taker, L/S, funding) se shranijo ob osveževanju futures panela, največ enkrat na 5 min na kovanec, in se hranijo 24 h v tej napravi. Vsak stolpec kaže 15-min obdobje do navedene ure. Taker in L/S sta samo za kovance, ki so bili v top 10 panela. Posnetki se zapisujejo samo, ko je stran odprta."],
   sec_log: ["Dnevnik", "Stolpci: Ura = začetek ure. Kov. = kovanci z rastjo prometa nad pragom. Sig. in Opoz. = število signalov in opozoril v uri. Cena = mediana urne spremembe cene kovancev. Promet = futures promet. OI = velikost OI v $. Spot = mediana urne spremembe spot cene. Spot prom. = spot promet 1 h. Skeni = število osveževanj v uri (rumeno = luknja, zap. = zapolnjeno iz Binance svečk). Pod vrstico so kovanci z rastjo prometa (x) in urno spremembo cene.\nVsako osveževanje futures panela se zapiše v urni zapis (cena, promet, OI, rast volumna po kovancih). Hrani se 7 dni, dnevni povzetki ostanejo.\nZapolni luknje: za zadnjih 24 h, kjer je bilo skenov manj kot 10, povleče 5-min svečke in OI zgodovino z Binance za do 40 kovancev. Signalov ne ustvarja nazaj.\nPovzetek dneva: kovanci z rastjo volumna, signali (brez dvojnikov 15 min/1 h), mediana urne spremembe cene, skupen promet, zadnji OI in 3 ure z največ prometa."],
   sec_check: ["Preveri žeton", "Prilepi naslov pogodbe. DEXScreener najde pare in izbere tistega z največ likvidnosti, veriga se zazna sama. Viri: DEXScreener (cene, likvidnost, promet), GoPlus (varnost pogodbe, EVM), GeckoTerminal (svečke in zadnja trgovanja). Pregled ni napoved cene."],
@@ -482,6 +483,7 @@ var INFO = {
   h_holes: ["Alpha kovanci z luknjami", "Kovanci, kjer manjka cena ali glavni bazen ni viden. Stran jih sama popravlja prek GeckoTerminala ali Binance Alpha svečk."],
   h_fut: ["Futures sken", "Starost zadnjega skena, število pregledanih kovancev in tisti z manjkajočim OI ali svečkami. Če je Binance omejil dostop, je to tu zapisano s časom počitka."],
   h_resp: ["Odzivnost strani", "Stran vsakih 5 s zabeleži utrip. Če med dvema utripoma ob vidni strani mine več kot 60 s, je stran zmrznila (brskalnik ali naprava je ustavila delovanje), zapis »zmrznjeno« je v dnevniku težav s trajanjem. Zatikanje = utrip zamudi 10 do 60 s (stran je preobremenjena).\nOb odprtju strani se preveri zadnji utrip: če stran več kot 90 s ni tekla (zaprta, ponovno naložena ali jo je brskalnik zavrgel), se zapiše »stran ni tekla«.\nZapis v shrambo: podatki (signali, dnevnik, posnetki, trgovanja, skeni) so v pomnilniku in se na disk zapišejo največ vsakih 15 s in ob skritju strani. Prikazan je čas zadnjega in najdaljšega zapisa ter velikost shranjenih podatkov.\nBot se še vedno zapisuje takoj."],
+  h_arch: ["Arhiv signalov", "Da stran ostane hitra in da se shramba strani (okoli 5 MB) ne napolni, se signali in opozorila, starejši od 7 dni, enkrat na uro premaknejo v arhiv v brskalniku (IndexedDB). Nič se ne briše. Sprotni izračuni (zavihek Signali, dnevnik, opozorila kovanca) upoštevajo zadnjih 7 dni, arhiv pa je vključen v Celoten izvoz in v Datoteka: ostali podatki, zato je na voljo za daljše analize. Kopiraj (odložišče) arhiva ne vsebuje, ker bi bil predolg."],
   h_gt: ["GeckoTerminal vrsta", "Vsi zahtevki GeckoTerminala gredo skozi eno vrsto (okoli 30 na minuto). Čakalna vrsta in število neuspelih zahtevkov od odprtja strani."],
   f_sum: ["Futures (1 h)", "Stanje futures para v 1 uri: stanje iz cene in OI, rast prometa, funding, razmerje L/S in taker. Opozorilo pri skrajnem fundingu ali natrpanih longih."],
   main_pool: ["Glavni bazen", "DEXScreener včasih ne vidi največjega bazena (npr. Uniswap V4). Aplikacija zato bazene dodatno poišče na GeckoTerminalu. Če drugi viri (GeckoTerminal, Binance Alpha) kažejo več kot dvakrat več likvidnosti, kot jo vidi aplikacija, se pokaže to opozorilo: cena, graf, trgovci in zdrs so lahko z majhnega bazena."],
@@ -577,7 +579,7 @@ var INFO_BY_LABEL = {
   "Imetniki": "holders_n", "Top 10 denarnic": "top10", "Delež ustvarjalca": "creator",
   "Normalni trgovci": "cls_normal", "Kiti (velika trgovanja)": "cls_whale", "Boti in lovci na točke": "cls_bot",
   "Največji preskok cene": "jump", "Največji 5-min promet": "spike5", "Največje trgovanje": "bigtrade",
-  "Top 5 imetnikov": "top5", "Kovanci dneva: največja rast cene": "d_up", "Najbolj negativni": "d_dn", "Spot: največja rast cene": "d_sup", "Spot: najbolj negativni": "d_sdn", "Največja rast volumna": "d_vol", "Signali (brez dvojnikov)": "d_sig", "Opozorila": "d_al", "Mediana urne spremembe cene": "d_med", "Skupen futures promet": "d_tv", "OI (zadnja ura)": "d_oi", "Vrhnje ure po prometu": "d_top", "Alpha seznam in DEXScreener": "h_alpha", "Alpha kovanci z luknjami": "h_holes", "Futures sken": "h_fut", "GeckoTerminal vrsta": "h_gt", "Odzivnost strani": "h_resp", "Futures (1 h)": "f_sum", "Top 5 brez pogodb in zaklenjenih": "top5free",
+  "Top 5 imetnikov": "top5", "Kovanci dneva: največja rast cene": "d_up", "Najbolj negativni": "d_dn", "Spot: največja rast cene": "d_sup", "Spot: najbolj negativni": "d_sdn", "Največja rast volumna": "d_vol", "Signali (brez dvojnikov)": "d_sig", "Opozorila": "d_al", "Mediana urne spremembe cene": "d_med", "Skupen futures promet": "d_tv", "OI (zadnja ura)": "d_oi", "Vrhnje ure po prometu": "d_top", "Alpha seznam in DEXScreener": "h_alpha", "Alpha kovanci z luknjami": "h_holes", "Futures sken": "h_fut", "GeckoTerminal vrsta": "h_gt", "Arhiv signalov": "h_arch", "Odzivnost strani": "h_resp", "Futures (1 h)": "f_sum", "Top 5 brez pogodb in zaklenjenih": "top5free",
   "Zdrs vnosa (ocena)": "slip", "Strošek kroga (vstop + izstop)": "cost", "Stop": "stop", "Cilj": "target",
   "Dobiček : tveganje (neto)": "rr", "Vnos za zdrs pod 1 %": "maxamt", "Najnižja cena zadnje ure": "low1h"
 };
@@ -2043,7 +2045,7 @@ function getRest(sym){
       var sx = Math.max(sA || 0, sB || 0);
       if (sx > 0) {
         var bb = pf(d[idx].buyVol) || 0, ss = pf(d[idx].sellVol) || 0;
-        res.tk.spike = {x: sx, ratio: ss > 0 ? bb / ss : null};
+        res.tk.spike = {x: sx, ratio: ss > 0 ? bb / ss : null, vol: bb + ss};
       }
     }
     restCache[sym] = {t: Date.now(), v: res};
@@ -2398,6 +2400,7 @@ function renderHealth(){
     "Pregledanih " + H.futN + ", z luknjami " + fu.length + (fu.length ? " (" + fu.slice(0, 8).map(function(o){ return o.sym; }).join(", ") + ")" : "") + (by("futsrc").length ? ". Napaka: " + by("futsrc")[0].msg : "") + (fBackoff > now ? ". Binance je omejil, počitek še " + Math.round((fBackoff - now) / 1000) + " s" : "") + ".",
     (by("futsrc").length || fBackoff > now) ? "red" : (fu.length || (ageF != null && ageF > 240)) ? "amber" : "green");
   var ri = respInfo(); h += metric("Odzivnost strani", ri.v, ri.t, ri.l);
+  h += metric("Arhiv signalov", ARCH.n == null ? "še ni" : ARCH.n + " zapisov", "Signali in opozorila, starejši od " + ARCH_DAYS + " dni, so v arhivu (IndexedDB) in niso v sprotnih izračunih. V tej seji premaknjenih: " + ARCH.moved + (ARCH.at ? ", zadnji pregled ob " + hhmm(ARCH.at) : "") + ". V shrambi strani ostane " + loadSigs().length + " zapisov. Arhiv je v celotnem izvozu in v datoteki ostalih podatkov." + (ARCH.err ? " Napaka: " + ARCH.err : ""), ARCH.err ? "red" : "");
   h += metric("GeckoTerminal vrsta", gtQ.length + " čaka", "Neuspelih zahtevkov od odprtja strani: " + H.gtFail + ".", gtQ.length > 10 || H.gtFail > 5 ? "amber" : "green");
   var unf = gRows.filter(function(r){ return !poolOk(r) && r.vol >= settings.min24; });
   h += metric("Popravek glavnega bazena", "uspelo " + H.fixOk + ", Alpha svečke " + H.fixAlpha + ", brez bazenov " + H.fixNone + ", napak " + H.fixErr, "Vrsta polna: " + H.gtFull + "×. Čaka na popravek (" + unf.length + "): " + (unf.length ? unf.slice(0, 8).map(function(r){ var c = gtFixCache[r.addr.toLowerCase()]; return r.sym + (c ? " (" + (c.why || c.via) + ", pred " + Math.round((Date.now() - (c.at || c.t)) / 60000) + " min)" : " (še ni poskusa)"); }).join(", ") : "nobeden") + ".", unf.length ? "amber" : "green");
@@ -2494,12 +2497,13 @@ var EVSHORT = {squeeze: "sq", newlong: "nl", newshort: "ns", liq: "lq", buyp: "b
 function isAl(s){ return !!(s && typeof s.st === "string" && s.st.indexOf("a_") === 0); }
 function evTxtH(h, evs){ return (evs || []).filter(function(e){ return Math.floor(e.t / HMS) === h; }).map(function(e){ return EVSHORT[e.st] || e.st; }).join(", "); }
 function evTxt(k, evs){ return (evs || []).filter(function(e){ return Math.floor(e.t / H6MS) === k; }).map(function(e){ return EVSHORT[e.st] || e.st; }).join(", "); }
-function logAlert(kind, per, c, p0, text, spotRow){
+function logAlert(kind, per, c, p0, text, spotRow, extra){
   alertLog.unshift({sym: c.label, addr: c.addr, rest: text + (p0 > 0 ? " · " + price(p0) : ""), time: new Date().toLocaleTimeString("sl-SI")});
   if (!(p0 > 0)) return;
   var sigs = loadSigs(), now = Date.now();
   var e = {id: c.sym + "_" + kind + "_" + now, sym: c.sym, label: c.label, addr: c.addr, t: now, per: per, p0: p0, st: kind, oc: null, pc: null, vx: null, fund: null, msg: text, o: {"15m": null, "30m": null, "1h": null, "3h": null}};
   if (spotRow) { e.src = "gt"; e.chain = spotRow.chain; e.pool = spotRow.pool; }
+  if (extra) Object.keys(extra).forEach(function(k){ e[k] = extra[k]; });
   sigs.push(e); saveSigs(sigs); evtCapture(e);
   renderSigs();
 }
@@ -2622,7 +2626,7 @@ function renderSigs(){
   var sg = sigs.filter(function(s){ return !isAl(s); }), al = sigs.filter(isAl);
   var sy = window.scrollY, rec = sigs.filter(function(s){ return s.t > Date.now() - 3 * 3600000; }), rhtml = (rec.length ? rec : sigs.slice(-8)).slice().reverse().map(evRow).join("");
   box.innerHTML =
-    '<div class="cap">Skupaj ' + sigWord(sg.length) + ' in ' + al.length + ' opozoril' + (dups ? ' (brez ' + dups + ' dvojnikov)' : '') + (bad.length ? ' (izločeno kot sumljivo, OI nad ' + OI_MAX + ' % ali lažni skok prometa »prej $0«: ' + bad.length + ')' : '') + '. Tapni skupino ali kovanec za podrobnosti. ' + infoBtn('s_read') + '</div>' +
+    '<div class="cap">Zadnjih ' + ARCH_DAYS + ' dni' + (ARCH.n ? ' (starejših ' + ARCH.n + ' je v arhivu)' : '') + ': ' + sigWord(sg.length) + ' in ' + al.length + ' opozoril' + (dups ? ' (brez ' + dups + ' dvojnikov)' : '') + (bad.length ? ' (izločeno kot sumljivo, OI nad ' + OI_MAX + ' % ali lažni skok prometa »prej $0«: ' + bad.length + ')' : '') + '. Tapni skupino ali kovanec za podrobnosti. ' + infoBtn('s_read') + '</div>' +
     '<div class="cap" style="margin-top:12px">Zadnji dogodki: ' + (rec.length ? 'vsi iz zadnjih 3 h (' + rec.length + ')' : 'zadnjih 8 (v 3 h ni novih)') + ', z izidi po 15 min, 30 min, 1 h in 3 h</div>' + rhtml +
     '<div class="cap" style="margin-top:12px"><b>Združeno po kovancih</b> (tapni kovanec za seznam)</div>' + coinGroupHtml(sigs) +
     '<div class="cap" style="margin-top:8px"><b>Signali</b></div>' + grpHtml(sg, false) +
@@ -2889,7 +2893,9 @@ function checkTakerAlerts(list){
   if (!hits.length) return;
   hits.sort(function(a, b){ return b.sp.x - a.sp.x; });
   hits.forEach(function(h){
-    logAlert("a_tk", "5m", {label: h.c.label, sym: h.c.sym, addr: h.c.addr}, h.c.kl && h.c.kl.last, "taker promet " + fr(h.sp.x) + "x povprečja, nakupi/prodaje " + fr(h.sp.ratio));
+    var lp = h.c.kl && h.c.kl.last, vu = (h.sp.vol > 0 && lp > 0) ? h.sp.vol * lp : null, w1 = h.c.kl && h.c.kl.vol["1h"], v1h = w1 && w1.v != null ? w1.v : null;
+    logAlert("a_tk", "5m", {label: h.c.label, sym: h.c.sym, addr: h.c.addr}, lp, "taker promet " + fr(h.sp.x) + "x povprečja, nakupi/prodaje " + fr(h.sp.ratio) + " · svečka " + usd(vu) + " · 1 h " + usd(v1h), null,
+      {vu: vu == null ? null : Math.round(vu), v1h: v1h == null ? null : Math.round(v1h), tx: r2(h.sp.x, 100), tr: r2(h.sp.ratio, 100)});
   });
   alertLog = alertLog.slice(0, 10);
   renderAlerts();
@@ -3034,7 +3040,7 @@ async function setWake(on){
 function watchdog(){
   if (!$("auto").checked) return;
   var now = Date.now();
-  healthSet("stale", [].concat(now - lastAlphaAt > 120000 ? [{k: "zastarelo", sym: "Alpha", msg: "zadnji sken pred " + Math.round((now - lastAlphaAt) / 1000) + " s"}] : [], now - lastFutAt > 240000 ? [{k: "zastarelo", sym: "Futures", msg: "zadnji sken pred " + Math.round((now - lastFutAt) / 1000) + " s"}] : []));
+  healthSet("stale", [].concat(lastAlphaAt && now - lastAlphaAt > 120000 ? [{k: "zastarelo", sym: "Alpha", msg: "zadnji sken pred " + Math.round((now - lastAlphaAt) / 1000) + " s"}] : [], lastFutAt && now - lastFutAt > 240000 ? [{k: "zastarelo", sym: "Futures", msg: "zadnji sken pred " + Math.round((now - lastFutAt) / 1000) + " s"}] : []));
   if (gBusy && now - gBusyAt > 60000) gBusy = false;
   if (futBusy && now - fBusyAt > 120000) { futBusy = false; futPending = false; }
   if (!gBusy && now - Math.max(lastAlphaAt, gBusyAt) > 75000) scanAlpha();
@@ -3441,6 +3447,10 @@ async function futText(){
     return r;
   } catch (err) { return h + "Futures podatkov ni bilo mogoče naložiti: " + err.message + "\n"; }
 }
+function sigLine(x){
+  return [x.label, x.per, x.st, new Date(x.t).toLocaleString("sl-SI"), price(x.p0), fr(x.vx) + "x", sgn(x.oc), sgn(x.pc), x.fund == null ? "–" : fr3(x.fund * 100) + " %",
+    ["15m", "30m", "1h", "3h"].map(function(k){ var v = x.o && x.o[k]; return typeof v === "number" ? sgn(v) : "…"; }).join("/"), x.msg || "", x.em ? emaTxt(x.em) : ""].join(" | ") + "\n";
+}
 function otherText(){
   var s = "=== OSTALI PODATKI APLIKACIJE ===\nČas: " + new Date().toLocaleString("sl-SI") + "\nRazličica: " + APP_VER + "\nOdzivnost: " + respInfo().t + "\n\n";
   s += "--- Največji rastoči (Alpha), zavihek " + gTab + " ---\n" + txt($("gainers")) + "\n\n";
@@ -3463,10 +3473,7 @@ function otherText(){
     });
   });
   s += logText() + healthText() + scanText() + tradersText() + botText() + "\n--- Signali (skupine) ---\n" + txt($("sigbox")) + "\n\n--- Vsi signali (kovanec | okno | stanje | čas | cena | vol | OI | cena% | funding | izid 15m/30m/1h/3h | opis) ---\n";
-  loadSigs().forEach(function(x){
-    s += [x.label, x.per, x.st, new Date(x.t).toLocaleString("sl-SI"), price(x.p0), fr(x.vx) + "x", sgn(x.oc), sgn(x.pc), x.fund == null ? "–" : fr3(x.fund * 100) + " %",
-      ["15m", "30m", "1h", "3h"].map(function(k){ var v = x.o && x.o[k]; return typeof v === "number" ? sgn(v) : "…"; }).join("/"), x.msg || "", x.em ? emaTxt(x.em) : ""].join(" | ") + "\n";
-  });
+  loadSigs().forEach(function(x){ s += sigLine(x); });
   s += evtText() + evCoinText() + "\n--- Opozorila ---\n" + alertLog.map(function(a){ return a.time + " " + a.sym + " " + a.rest; }).join("\n");
   s += "\n\n--- Moj seznam ---\n" + loadWatch().map(function(w){ return (w.sym || "") + " " + w.addr; }).join("\n");
   s += "\n\n--- Nastavitve ---\n" + JSON.stringify(settings) + "\n";
@@ -4998,7 +5005,7 @@ $("flcoin").addEventListener("click", async function(){
   var t = await coinFull();
   if (t) saveFile("zeton-" + String($("out").dataset.sym || "x").replace(/[^A-Za-z0-9]/g, ""), "txt", t, $("cpmsg"));
 });
-$("flother").addEventListener("click", function(){ saveFile("ostali-podatki", "txt", otherText(), $("cpmsg")); });
+$("flother").addEventListener("click", async function(){ $("cpmsg").textContent = "Zbiram…"; saveFile("ostali-podatki", "txt", otherText() + await archText(), $("cpmsg")); });
 $("botfile").addEventListener("click", function(){ saveFile("bot", "txt", botText(), $("botmsg")); });
 $("sigfile").addEventListener("click", function(){ saveFile("izvoz", "json", exportData(), $("sigfilemsg")); });
 $("sigfileimp").addEventListener("click", function(){ $("sigfilein").click(); });
@@ -5008,8 +5015,68 @@ $("sigfilein").addEventListener("change", function(){
     $("sigfilemsg").textContent = "Iz datoteke " + nm + ": " + $("iomsg").textContent;
   }, $("sigfilemsg"));
 });
+/* ---------- arhiv signalov: starejši od 7 dni gredo v IndexedDB (skeni jih ne berejo) ---------- */
+function archOpen(){
+  return new Promise(function(res, rej){
+    if (archDb) return res(archDb);
+    if (!window.indexedDB) return rej(new Error("IndexedDB ni na voljo"));
+    var r = indexedDB.open("ct_arhiv", 1);
+    r.onupgradeneeded = function(){ var db = r.result; if (!db.objectStoreNames.contains("sig")) db.createObjectStore("sig", {keyPath: "id"}); };
+    r.onsuccess = function(){ archDb = r.result; res(archDb); };
+    r.onerror = function(){ rej(r.error || new Error("IndexedDB napaka")); };
+  });
+}
+function archPut(list){
+  return archOpen().then(function(db){ return new Promise(function(res, rej){
+    var tx = db.transaction("sig", "readwrite"), st = tx.objectStore("sig");
+    list.forEach(function(x){ st.put(x); });
+    tx.oncomplete = function(){ res(list.length); };
+    tx.onerror = tx.onabort = function(){ rej(tx.error || new Error("zapis v arhiv ni uspel")); };
+  }); });
+}
+function archAll(){
+  return archOpen().then(function(db){ return new Promise(function(res, rej){
+    var r = db.transaction("sig").objectStore("sig").getAll();
+    r.onsuccess = function(){ res((r.result || []).sort(function(a, b){ return a.t - b.t; })); };
+    r.onerror = function(){ rej(r.error); };
+  }); });
+}
+function archCount(){
+  return archOpen().then(function(db){ return new Promise(function(res, rej){
+    var r = db.transaction("sig").objectStore("sig").count();
+    r.onsuccess = function(){ res(r.result); }; r.onerror = function(){ rej(r.error); };
+  }); });
+}
+async function archRun(){
+  if (archBusy) return;
+  archBusy = true;
+  try {
+    var cut = Date.now() - ARCH_DAYS * 86400000;
+    var old = loadSigs().filter(function(x){ return x && x.id && isFinite(x.t) && x.t < cut; });
+    if (old.length) {
+      await archPut(old);
+      var ids = {};
+      old.forEach(function(x){ ids[x.id] = 1; });
+      saveSigs(loadSigs().filter(function(x){ return !(x && ids[x.id]); }));
+      ARCH.moved += old.length;
+    }
+    ARCH.n = await archCount(); ARCH.at = Date.now(); ARCH.err = "";
+    if (old.length) { renderSigs(); renderLog(); }
+  } catch (e) { ARCH.err = String(e && e.message || e); }
+  archBusy = false;
+  try { renderHealth(); } catch (e2) {}
+}
+async function archText(){
+  var a = [];
+  try { a = await archAll(); } catch (e) { return "\n--- Arhiv signalov: ni bilo mogoče prebrati (" + (e && e.message) + ") ---\n"; }
+  var s = "\n--- Arhiv signalov in opozoril, starejši od " + ARCH_DAYS + " dni (" + a.length + "; kovanec | okno | stanje | čas | cena | vol | OI | cena% | funding | izid 15m/30m/1h/3h | opis) ---\n";
+  a.forEach(function(x){ s += sigLine(x); });
+  return s;
+}
+setTimeout(archRun, 20000);
+setInterval(archRun, 3600000);
 /* ---------- celoten izvoz in uvoz ---------- */
-function allExport(){
+async function allExport(){
   if (typeof lsFlush === "function") lsFlush();
   var data = {};
   for (var i = 0; i < localStorage.length; i++) {
@@ -5021,6 +5088,8 @@ function allExport(){
   }
   var txt = "";
   try { txt = otherText(); } catch (e2) { txt = "ni bilo mogoče sestaviti: " + (e2 && e2.message); }
+  try { data.ct_sig_arch = await archAll(); } catch (e3) { data.ct_sig_arch = []; }
+  try { txt += await archText(); } catch (e4) {}
   return JSON.stringify({v: 2, app: "pregled-zetona", dev: devTag(), t: Date.now(), cas: new Date().toLocaleString("sl-SI"), ver: typeof APP_VER === "string" ? APP_VER : "glavna", data: data, text: txt});
 }
 function botMerge(cur, inc, skipOpen){
@@ -5048,6 +5117,11 @@ function allImport(text, name){
     BST = BST.slice(-600); BW = BW.slice(-80);
     botSave(); botWSave(); try { botRender(); } catch (e3) {}
     parts.push("Bot: " + nb + " zaprtih pozicij in " + nw + " zapisov opazovanja.");
+    if (Array.isArray(d.ct_sig_arch) && d.ct_sig_arch.length) {
+      var av = d.ct_sig_arch.filter(function(x){ return x && x.id && isFinite(x.t); });
+      archPut(av).then(function(){ archRun(); }, function(e5){ ARCH.err = String(e5 && e5.message || e5); });
+      parts.push("Arhiv: " + av.length + " zapisov (obstoječi se prepišejo z istimi).");
+    }
     if ((d.ct_set || d.ct_botcfg) && typeof confirm === "function" && confirm("Uvozim tudi nastavitve strani in bota iz datoteke? Tema ntfy ostane tvoja. Stran se bo nato znova naložila.")) {
       try {
         if (d.ct_set && typeof d.ct_set === "object") { var s = Object.assign({}, d.ct_set); s.ntfy = settings.ntfy; localStorage.setItem("ct_set", JSON.stringify(s)); }
@@ -5061,7 +5135,7 @@ function allImport(text, name){
   }
   msg.textContent = "Iz " + name + (o.dev ? " (" + o.dev + (o.cas ? ", " + o.cas : "") + ")" : "") + ": " + parts.join(" ");
 }
-$("allexp").addEventListener("click", function(){ $("allmsg").textContent = "Zbiram…"; setTimeout(function(){ saveFile("celoten-izvoz", "json", allExport(), $("allmsg")); }, 30); });
+$("allexp").addEventListener("click", async function(){ $("allmsg").textContent = "Zbiram…"; saveFile("celoten-izvoz", "json", await allExport(), $("allmsg")); });
 $("allimp").addEventListener("click", function(){ $("allin").click(); });
 $("allin").addEventListener("change", function(){ readFile(this, allImport, $("allmsg")); });
 $("anafile").addEventListener("click", function(){ $("anafilein").click(); });
