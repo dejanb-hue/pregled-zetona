@@ -171,6 +171,8 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
     <label><span>Opozori, ko cena v 5 min pade pod −<span class="info" role="button" tabindex="0" data-info="set_thrdn" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="thrdn" min="1" step="1" inputmode="decimal"> %</span></label>
     <label><span>Opozori ob skoku open interesta v 5 min nad<span class="info" role="button" tabindex="0" data-info="set_oi" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="oithr" min="0.5" step="0.5" inputmode="decimal"> %</span></label>
     <label><span>Opozori, ko taker promet (5 min) preseže povprečje za<span class="info" role="button" tabindex="0" data-info="set_tk" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="tkthr" min="1.5" step="0.5" inputmode="decimal"> x</span></label>
+    <label><span>Taker: najmanjši promet 5 min svečke (0 = izklop)</span><span><input type="number" id="tkminvu" min="0" step="10000" inputmode="decimal"> $</span></label>
+    <label><span>Taker: najmanjši futures promet 1 h (0 = izklop)</span><span><input type="number" id="tkminv1" min="0" step="100000" inputmode="decimal"> $</span></label>
     <label><span>Nakupni pritisk: nakupi proti prodajam (število, 1 h) vsaj<span class="info" role="button" tabindex="0" data-info="set_bp" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="bpthr" min="1.1" step="0.1" inputmode="decimal"> x</span></label>
     <label><span>Nakupni pritisk: nakupi proti prodajam (USD) vsaj<span class="info" role="button" tabindex="0" data-info="set_usd" aria-label="Razlaga">ⓘ</span></span><span><input type="number" id="usdthr" min="1" step="0.1" inputmode="decimal"> x</span></label>
     <label><span>Futures: pogoji za prikaz<span class="info" role="button" tabindex="0" data-info="set_cond" aria-label="Razlaga">ⓘ</span></span><select id="fcond"><option value="both">oba pogoja</option><option value="any">vsaj eden</option><option value="none">brez filtra</option></select></label>
@@ -449,7 +451,7 @@ var INFO = {
   sec_b15: ["Zadnjih 15 min po 5 min", "Zadnjih 15 minutnih svečk glavnega para (GeckoTerminal), razdeljenih na tri 5-minutna obdobja. Za vsako: sprememba cene od odprtja do zaprtja, promet v USD, delež prometa v teh 15 min in razpon (najvišja proti najnižji ceni).\nPromet je samo glavni par. Nakupov in prodaj v dolarjih ta vir ne daje, kdo je trgoval (kiti, boti) pa tudi ne: to je v razdelku Promet po vrsti trgovcev, ki zajame samo zadnjih ~300 trgovanj.\nZadnja minuta je lahko še tekoča, zato je zadnje obdobje rahlo podcenjeno."],
   set_thr: ["Opozorilo ob rasti cene", "Ko cena Alpha žetona (DEXScreener, glavni par) v 5 min zraste nad ta prag in ima žeton vsaj izbrano likvidnost, se sproži opozorilo (zvok, vibracija, oznaka na vrhu). Isti žeton se ne javi znova 15 min."],
   set_oi: ["Opozorilo ob skoku OI", "Open interest je število odprtih futures pogodb. Če se v 5 min spremeni (v količini, ne v dolarjih) za več kot ta prag, se sproži opozorilo. Preverja do 40 pregledanih futures kovancev."],
-  set_tk: ["Opozorilo ob taker prometu", "Taker promet so agresivni tržni nakupi in prodaje. Zadnjo 5-min svečo primerjam s povprečjem prejšnjih 12. Če je X-krat višja, se sproži opozorilo. Velja za top 10 v futures panelu."],
+  set_tk: ["Opozorilo ob taker prometu", "Taker promet so agresivni tržni nakupi in prodaje. Zadnjo 5-min svečo primerjam s povprečjem prejšnjih 12. Če je X-krat višja, se sproži opozorilo. Velja za top 10 v futures panelu. Opozorilo se ne ustvari, če je promet te 5-min svečke pod spodnjo mejo ali futures promet 1 h pod spodnjo mejo (privzeto $100K in $500K; podatki kažejo, da se pod tema mejama kovanci skoraj ne premaknejo). Ob manjkajočem podatku se meja ne uporabi."],
   set_cond: ["Pogoji za prikaz", "Oba pogoja: kovanec mora hkrati imeti rast volumna in spremembo OI nad pragoma. Vsaj eden: dovolj je en pogoj. Brez filtra: prikaže vse, razvrščeno po rasti volumna.\nČe je izbrano »oba« in noben kovanec ne izpolni obeh, panel pokaže najbližje (izpolnjujejo samo enega)."],
   set_volx: ["Rast volumna", "Futures promet (USDT) v zadnjem oknu (15 min, 1 h ali 3 h glede na izbrano obdobje), deljen s prometom v enako dolgem prejšnjem oknu. 2x pomeni dvakrat več kot prej."],
   set_oimin: ["Sprememba OI", "Absolutna sprememba open interesta v količini pogodb v izbranem obdobju. Šteje rast in padec (padec OI ob rasti cene je squeeze)."],
@@ -1527,7 +1529,7 @@ var DX_CHAIN = {"56":"bsc","1":"ethereum","8453":"base","42161":"arbitrum","137"
 var gBusyAt = 0, fBusyAt = 0, lastAlphaAt = 0, lastFutAt = 0, wd = null;
 var alphaTokens = null, alphaAt = 0, gRows = [], gTab = "15m", gBusy = false, k15Busy = false, gTimer = null;
 var alerted = {}, alertLog = [], audioCtx = null, wakeLock = null, k15Fail = false;
-var settings = {auto: false, autoFill: true, thr: 10, thrDn: 7, minLiq: 10000, oiThr: 3, tkThr: 3, volX: 2, oiMin: 2, bpThr: 1.8, usdThr: 1.3, minTx: 100, ntfy: "", px15: 8, px30: 9, px1h: 10, min24: 2000000, min1h: 100000, leadVol: 2000000, cond: "both", tf: {amt: 100, stop: 5, tgt: 10, fee: 0.25}};
+var settings = {tkMinVu: 100000, tkMinV1h: 500000, auto: false, autoFill: true, thr: 10, thrDn: 7, minLiq: 10000, oiThr: 3, tkThr: 3, volX: 2, oiMin: 2, bpThr: 1.8, usdThr: 1.3, minTx: 100, ntfy: "", px15: 8, px30: 9, px1h: 10, min24: 2000000, min1h: 100000, leadVol: 2000000, cond: "both", tf: {amt: 100, stop: 5, tgt: 10, fee: 0.25}};
 
 function loadSettings(){
   try {
@@ -1537,6 +1539,8 @@ function loadSettings(){
     if (num(o.minLiq) != null) settings.minLiq = num(o.minLiq);
     if (num(o.oiThr) != null && o.oiThr > 0) settings.oiThr = num(o.oiThr);
     if (num(o.tkThr) != null && o.tkThr > 0) settings.tkThr = num(o.tkThr);
+    if (num(o.tkMinVu) != null && o.tkMinVu >= 0) settings.tkMinVu = num(o.tkMinVu);
+    if (num(o.tkMinV1h) != null && o.tkMinV1h >= 0) settings.tkMinV1h = num(o.tkMinV1h);
     if (num(o.bpThr) != null && o.bpThr > 1) settings.bpThr = num(o.bpThr);
     if (num(o.usdThr) != null && o.usdThr >= 1) settings.usdThr = num(o.usdThr);
     if (num(o.volX) != null && o.volX > 0) settings.volX = num(o.volX);
@@ -2107,7 +2111,7 @@ async function akScan(){
   try {
     var vr = visibleRows().filter(function(r){ return r.alphaId != null && r.price > 0; }), seen = {}, cand = [];
     var by = function(k){ return vr.filter(function(r){ return r[k] != null; }).sort(function(a, b){ return b[k] - a[k]; }).slice(0, 8); };
-    by("m5").concat(by("h1")).concat(vr.slice(0, 6)).forEach(function(r){ var k = r.addr.toLowerCase(); if (!seen[k]) { seen[k] = 1; cand.push(r); } });
+    by("m5").concat(by("h1")).concat(vr.filter(function(r){ return r.miss; }).slice(0, 10)).concat(vr.slice(0, 6)).forEach(function(r){ var k = r.addr.toLowerCase(); if (!seen[k]) { seen[k] = 1; cand.push(r); } });
     BW.filter(function(w){ return w.st === "watch"; }).concat(BST.filter(function(p){ return p.st === "open"; })).forEach(function(x){
       var r = gRows.filter(function(g){ return g.sym === x.sym || g.sym === x.label; })[0];
       if (r && r.addr && !seen[r.addr.toLowerCase()]) { seen[r.addr.toLowerCase()] = 1; cand.push(r); }
@@ -2263,15 +2267,18 @@ function healthSet(src, list){
   renderHealth();
 }
 function checkAlphaHealth(){
-  var list = [], quiet = [];
+  var list = [], quiet = [], multi = [];
   gRows.forEach(function(r){
     if (r.vol < settings.min24) return;
     var a = r.addr.toLowerCase(), add = function(k, msg){ list.push({k: k, sym: r.sym, addr: a, msg: msg}); };
-    if (r.miss && !r.fixed) add("glavni bazen ni viden", "likv. DEX " + usd(r.dexLiq) + " proti " + usd(r.liq));
+    if (r.miss && !r.fixed) {
+      if (r.ak && Date.now() - r.ak.t < 600000 && r.price > 0) multi.push(r.sym);
+      else add("glavni bazen ni viden", "likv. DEX " + usd(r.dexLiq) + " proti " + usd(r.liq));
+    }
     else if (!(r.price > 0)) add("brez cene", "");
     else if (liveOk(r) && (r.m5 == null || r.h1 == null)) quiet.push(r.sym + (r.m5 == null ? " 5 min" : " 1 h"));
   });
-  H.quiet = quiet;
+  H.quiet = quiet; H.multi = multi;
   healthSet("alpha", list);
 }
 async function healAlpha(todo){
@@ -2306,7 +2313,7 @@ function renderHealth(){
   var by = function(src){ return open.filter(function(o){ return o.src === src; }); };
   var ageA = lastAlphaAt ? Math.round((now - lastAlphaAt) / 1000) : null, ageF = lastFutAt ? Math.round((now - lastFutAt) / 1000) : null;
   var al = by("alpha"), fu = by("fut").concat(by("futrest"));
-  var qt = (H.quiet && H.quiet.length) ? " Brez 5 min ali 1 h (verjetno ni trgovanj, ni luknja): " + H.quiet.slice(0, 10).join(", ") + "." : "";
+  var qt = ((H.multi && H.multi.length) ? " Več bazenov (likvidnost razpršena, podatki iz Alpha svečk, ni napaka): " + H.multi.slice(0, 12).join(", ") + "." : "") + ((H.quiet && H.quiet.length) ? " Brez 5 min ali 1 h (verjetno ni trgovanj, ni luknja): " + H.quiet.slice(0, 10).join(", ") + "." : "");
   var h = "";
   h += metric("Alpha seznam in DEXScreener", ageA == null ? "še ni" : "pred " + ageA + " s",
     "Paketov " + H.dexJobs + ", neuspelih " + H.dexFail + ". Sken traja " + (H.alphaMs / 1000).toFixed(1).replace(".", ",") + " s. Brez DEX podatkov (promet 24 h nad pragom): " + (H.noData.length ? H.noData.join(", ") : "nobenega") + "." + (by("alphasrc").length ? " Napaka: " + by("alphasrc")[0].msg : ""),
@@ -2803,6 +2810,9 @@ function checkTakerAlerts(list){
     var sp = c.rest && c.rest.tk && c.rest.tk.spike;
     if (!sp) return;
     var k = "tk:" + c.sym;
+    var lp0 = c.kl && c.kl.last, vu0 = (sp.vol > 0 && lp0 > 0) ? sp.vol * lp0 : null, w10 = c.kl && c.kl.vol && c.kl.vol["1h"], v10 = w10 && w10.v != null ? w10.v : null;
+    if (vu0 != null && settings.tkMinVu > 0 && vu0 < settings.tkMinVu) return;
+    if (v10 != null && settings.tkMinV1h > 0 && v10 < settings.tkMinV1h) return;
     if (sp.x >= settings.tkThr && (!alerted[k] || now - alerted[k] > 900000)) { alerted[k] = now; hits.push({c: c, sp: sp}); }
   });
   if (!hits.length) return;
@@ -3136,6 +3146,8 @@ document.addEventListener("input", function(e){
   var v = num(String(t.value).replace(",", "."));
   if (v != null && v >= 0) { settings.tf[k] = v; saveSettings(); computeTF(); }
 });
+$("tkminvu").addEventListener("change", function(){ var v = num(this.value.replace(",", ".")); settings.tkMinVu = (v != null && v >= 0) ? v : 100000; this.value = settings.tkMinVu; saveSettings(); });
+$("tkminv1").addEventListener("change", function(){ var v = num(this.value.replace(",", ".")); settings.tkMinV1h = (v != null && v >= 0) ? v : 500000; this.value = settings.tkMinV1h; saveSettings(); });
 $("tkthr").addEventListener("change", function(){
   var v = num(this.value.replace(",", "."));
   settings.tkThr = (v && v > 0) ? v : 3;
@@ -3410,7 +3422,7 @@ loadSettings();
 $("thr").value = settings.thr;
 $("minliq").value = String(settings.minLiq);
 $("oithr").value = settings.oiThr;
-$("tkthr").value = settings.tkThr;
+$("tkthr").value = settings.tkThr; $("tkminvu").value = settings.tkMinVu; $("tkminv1").value = settings.tkMinV1h;
 $("bpthr").value = settings.bpThr;
 $("usdthr").value = settings.usdThr;
 $("fcond").value = settings.cond;
