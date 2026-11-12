@@ -139,7 +139,7 @@ details.frow[open] summary{margin-bottom:4px}
 .stack span{display:block;height:100%}
 .c-normal{background:var(--accent)}.c-whale{background:var(--amber)}.c-bot{background:var(--muted)}
 [data-tab]{display:none}
-body[data-t="log"] [data-tab="log"],body[data-t="spot"] [data-tab="spot"],body[data-t="set"] [data-tab="set"],body[data-t="sig"] [data-tab="sig"],body[data-t="chk"] [data-tab="chk"],body[data-t="ana"] [data-tab="ana"],body[data-t="bot"] [data-tab="bot"],body[data-t="all"] [data-tab]{display:block}
+body[data-t="log"] [data-tab="log"],body[data-t="spot"] [data-tab="spot"],body[data-t="set"] [data-tab="set"],body[data-t="sig"] [data-tab="sig"],body[data-t="chk"] [data-tab="chk"],body[data-t="ana"] [data-tab="ana"],body[data-t="bot"] [data-tab="bot"],body[data-t="gr"] [data-tab="gr"],body[data-t="all"] [data-tab]{display:block}
 body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 #tabbar{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
 #tabbar button{flex:1;background:transparent;color:var(--muted);border-radius:0;min-height:54px;padding:0 1px;font-size:11px}
@@ -295,6 +295,25 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div id="watch" class="watch"></div>
 
   </div>
+  <div data-tab="gr">
+  <h2 style="margin-top:4px">Grafi epizod</h2>
+  <p class="note">Vsak graf: črta skupne rasti od začetka, pika na koncu vsakega obdobja, % obdobja nad točkami, oranžna črtkana črta je trail (vklopi se pri +10 %), rdeča pika je izstop. Spodaj so promet, OI in taker (futures, samo signal). Epizode istega kovanca so zbrane skupaj, vsaka ima svoj graf.</p>
+  <div id="grctl" class="row" style="flex-wrap:wrap;align-items:center"></div>
+  <div id="grlist" style="margin-top:8px"></div>
+  <h2>Dodaj epizodo ročno</h2>
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <select id="grsym" style="background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit;font-size:16px"></select>
+    <div class="row" style="flex-wrap:wrap"><button class="ghost small" data-g="q" data-v="6">6 h</button><button class="ghost small" data-g="q" data-v="12">12 h</button><button class="ghost small" data-g="q" data-v="24">24 h</button><button class="ghost small" data-g="q" data-v="48">48 h</button></div>
+    <label class="cap">Od</label><input id="grfrom" type="datetime-local" style="background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit;font-size:16px">
+    <label class="cap">Do</label><input id="grto" type="datetime-local" style="background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit;font-size:16px">
+    <button id="gradd">Shrani epizodo</button>
+    <div class="cap" id="grmsg"></div>
+  </div>
+  <h2>Samodejni sprožilec</h2>
+  <p class="note">Epizoda se shrani sama, ko kovanec v 6 h zraste za toliko % od dna. Nato jo posodablja do 4 h po vrhu. 0 = izklopljeno.</p>
+  <div class="row" style="align-items:center"><input type="text" id="grtrig" inputmode="decimal" style="max-width:110px"><span class="cap">% rast v 6 h</span></div>
+  <div class="cap" id="grinfo" style="margin-top:10px"></div>
+  </div>
   <div data-tab="bot">
   <h2>Papirnati bot<span class="info" role="button" tabindex="0" data-info="sec_bot" aria-label="Razlaga">ⓘ</span></h2>
   <p class="note">Samo beleži, nič se ne izvede. Nove pozicije dobijo trenutne nastavitve, odprte ohranijo tiste iz trenutka vstopa. Sprožilci delujejo ob odprti strani in vklopljenem samodejnem osveževanju, pozicije se poračunajo iz 1-min svečk Binance Futures (cena futures je približek spot cene).</p>
@@ -317,7 +336,7 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   </div>
   <p class="tiny">Samo informativno, ni finančno svetovanje. Prikazani pragovi so splošna pravila, ne jamstvo. Podatki so lahko zamaknjeni ali nepopolni, zato vedno preveri tudi sam.</p>
 </main>
-<nav id="tabbar"><button data-t="set">Nastavitve</button><button data-t="spot">Spot/Futures</button><button data-t="sig">Signali</button><button data-t="log">Dnevnik</button><button data-t="chk">Žeton</button><button data-t="bot">Bot</button><button data-t="ana">Analiza</button></nav>
+<nav id="tabbar"><button data-t="set">Nastavitve</button><button data-t="spot">Spot/Futures</button><button data-t="sig">Signali</button><button data-t="log">Dnevnik</button><button data-t="chk">Žeton</button><button data-t="bot">Bot</button><button data-t="gr">Grafi</button><button data-t="ana">Analiza</button></nav>
 
 <div id="infosheet" hidden><div class="isheet" role="dialog" aria-modal="true"><div class="ih"><b id="ititle"></b><button class="ghost small" id="iclose">Zapri</button></div><div id="itext"></div></div></div>
 <script>
@@ -1577,7 +1596,7 @@ var DX_CHAIN = {"56":"bsc","1":"ethereum","8453":"base","42161":"arbitrum","137"
 var gBusyAt = 0, fBusyAt = 0, lastAlphaAt = 0, lastFutAt = 0, wd = null;
 var alphaTokens = null, alphaAt = 0, gRows = [], gTab = "15m", gBusy = false, k15Busy = false, gTimer = null;
 var alerted = {}, alertLog = [], audioCtx = null, wakeLock = null, k15Fail = false;
-var settings = {tkMinVu: 100000, tkMinV1h: 500000, auto: false, autoFill: true, thr: 10, thrDn: 7, minLiq: 10000, oiThr: 3, tkThr: 3, volX: 2, oiMin: 2, bpThr: 1.8, usdThr: 1.3, minTx: 100, ntfy: "", px15: 8, px30: 9, px1h: 10, min24: 2000000, min1h: 100000, leadVol: 2000000, cond: "both", tf: {amt: 100, stop: 5, tgt: 10, fee: 0.25}};
+var settings = {tkMinVu: 100000, tkMinV1h: 500000, auto: false, autoFill: true, thr: 10, thrDn: 7, minLiq: 10000, oiThr: 3, tkThr: 3, volX: 2, oiMin: 2, bpThr: 1.8, usdThr: 1.3, minTx: 100, ntfy: "", px15: 8, px30: 9, px1h: 10, min24: 2000000, min1h: 100000, leadVol: 2000000, cond: "both", tf: {amt: 100, stop: 5, tgt: 10, fee: 0.25}, epTrig: 30};
 
 function loadSettings(){
   try {
@@ -1599,6 +1618,7 @@ function loadSettings(){
     if (typeof o.ntfy === "string") settings.ntfy = o.ntfy;
     if (num(o.leadVol) != null && o.leadVol > 0) settings.leadVol = num(o.leadVol);
     if (o.cond === "both" || o.cond === "any" || o.cond === "none") settings.cond = o.cond;
+    if (num(o.epTrig) != null && o.epTrig >= 0) settings.epTrig = num(o.epTrig);
     if (typeof o.auto === "boolean") settings.auto = o.auto;
     if (typeof o.autoFill === "boolean") settings.autoFill = o.autoFill;
     if (o.tf && typeof o.tf === "object") ["amt", "stop", "tgt", "fee"].forEach(function(k){ if (num(o.tf[k]) != null && o.tf[k] >= 0) settings.tf[k] = num(o.tf[k]); });
@@ -2146,6 +2166,7 @@ async function alphaTkGet(r, force){
     return {v: v, b: hb ? b : null, s: hb ? v - b : null, n: t, sh: (hb && v > 0) ? b / v : null, r: (hb && v - b > 0) ? b / (v - b) : null};
   };
   var o = {t: nw, m5: agg(5), m15: agg(15), h1: agg(60)};
+  if (o.h1.b != null && o.h1.v > 0 && o.h1.b >= o.h1.v * 0.995) ["m5", "m15", "h1"].forEach(function(k){ o[k].b = null; o[k].s = null; o[k].sh = null; o[k].r = null; });
   AKC[key] = o; r.ak = o; return o;
 }
 function akTxt(a){
@@ -2704,7 +2725,7 @@ async function scanFut(){
       if (okL.length) { calcLeaders(okL); renderLeaders(); }
       scanFutStats(cands, ok, passed.length, ranked.length, near);
       await pool(lastLead, 4, async function(c){ if (!c.rest) c.rest = await getRest(c.sym); });
-      logHist(okL, ticks, prem); logScan(okL, ticks);
+      logHist(okL, ticks, prem); try { logLong(okL, ticks, prem); } catch (eL) {} logScan(okL, ticks);
       var added = logSignals(okL, ticks, prem);
       checkFutAlerts(okL);
       checkPxAlerts(okL);
@@ -4851,11 +4872,12 @@ function showTab(t){
   try { localStorage.setItem("ct_tab", t); } catch (e) {}
   if (t === "log") { renderTop6(false); renderTraders(); renderScans(); }
   if (t === "bot") botRender();
+  if (t === "gr" && typeof renderGr === "function") { try { renderGr(); } catch (e) {} }
   window.scrollTo(0, 0);
 }
 $("tabbar").addEventListener("click", function(e){ var b = e.target.closest("button"); if (b) showTab(b.getAttribute("data-t")); });
 var st0 = "spot"; try { st0 = localStorage.getItem("ct_tab") || "spot"; } catch (e) {}
-if (!/^(set|spot|sig|chk|ana|log|bot)$/.test(st0)) st0 = "spot";
+if (!/^(set|spot|sig|chk|ana|log|bot|gr)$/.test(st0)) st0 = "spot";
 showTab(st0);
 function pnum(s){
   s = String(s == null ? "" : s).trim();
@@ -5087,6 +5109,290 @@ async function archText(){
 }
 setTimeout(archRun, 20000);
 setInterval(archRun, 3600000);
+/* ---------- dolga zgodovina (IndexedDB, 72 h) in shranjene epizode ---------- */
+var LONG_H = 72, LH = {}, EPS = [], longDb = null, longDirty = {}, epDirty = {}, longErr = "", grReady = false, grIv = 15, grTr = 20, grMsgT = "";
+function longOpen(){
+  return new Promise(function(res, rej){
+    if (longDb) return res(longDb);
+    if (!window.indexedDB) return rej(new Error("IndexedDB ni na voljo"));
+    var r = indexedDB.open("ct_dolgo", 1);
+    r.onupgradeneeded = function(){ var db = r.result; if (!db.objectStoreNames.contains("h")) db.createObjectStore("h", {keyPath: "k"}); if (!db.objectStoreNames.contains("ep")) db.createObjectStore("ep", {keyPath: "id"}); };
+    r.onsuccess = function(){ longDb = r.result; res(longDb); };
+    r.onerror = function(){ rej(r.error || new Error("IndexedDB napaka")); };
+  });
+}
+function longGetAll(store){
+  return longOpen().then(function(db){ return new Promise(function(res, rej){
+    var r = db.transaction(store).objectStore(store).getAll();
+    r.onsuccess = function(){ res(r.result || []); }; r.onerror = function(){ rej(r.error); };
+  }); });
+}
+function longPut(store, list){
+  if (!list.length) return Promise.resolve(0);
+  return longOpen().then(function(db){ return new Promise(function(res, rej){
+    var tx = db.transaction(store, "readwrite"), st = tx.objectStore(store);
+    list.forEach(function(x){ st.put(x); });
+    tx.oncomplete = function(){ res(list.length); };
+    tx.onerror = tx.onabort = function(){ rej(tx.error || new Error("zapis ni uspel")); };
+  }); });
+}
+function longDel(store, key){
+  return longOpen().then(function(db){ return new Promise(function(res, rej){
+    var tx = db.transaction(store, "readwrite"); tx.objectStore(store)["delete"](key);
+    tx.oncomplete = function(){ res(1); }; tx.onerror = tx.onabort = function(){ rej(tx.error); };
+  }); });
+}
+function longMerge(k, rows){
+  var cur = LH[k] || [], seen = {}, out = [];
+  cur.concat(rows || []).forEach(function(r){ if (r && isFinite(r[0]) && !seen[r[0]]) { seen[r[0]] = 1; out.push(r); } });
+  out.sort(function(a, b){ return a[0] - b[0]; });
+  var cut = Date.now() - LONG_H * 3600000;
+  LH[k] = out.filter(function(r){ return r[0] >= cut; });
+}
+async function longLoad(){
+  try {
+    var h = await longGetAll("h");
+    h.forEach(function(x){ if (x && x.k && Array.isArray(x.r) && x.r.length) longMerge(x.k, x.r); });
+    var e = await longGetAll("ep");
+    var ids = {}; EPS.forEach(function(x){ ids[x.id] = 1; });
+    e.forEach(function(x){ if (x && x.id && !ids[x.id]) EPS.push(x); });
+    EPS.sort(function(a, b){ return b.t0 - a.t0; });
+  } catch (err) { longErr = String(err && err.message || err); }
+  grReady = true; try { renderGr(); } catch (e2) {}
+}
+function logLong(cands, ticks, prem){
+  var now = Date.now(), cut = now - LONG_H * 3600000;
+  cands.forEach(function(c){
+    var tk = ticks[c.sym];
+    if (!tk || !tk.price || !c.oi || !c.kl) return;
+    var a = LH[c.sym] || (LH[c.sym] = []), last = a[a.length - 1];
+    if (last && now - last[0] < 270000) return;
+    var w = c.kl.vol["15m"], pr = prem && prem[c.sym], rs = c.rest || {};
+    a.push([now, tk.price, r2(c.kl.px["15m"], 100), r2(c.oi.c15, 100), r2(w && w.x, 100), (w && w.v != null) ? Math.round(w.v) : null,
+      rs.tk ? r2(rs.tk.r15, 100) : null, (pr && pr.fund != null) ? r2(pr.fund * 100, 1000) : null, rs.gl ? r2(rs.gl.now, 100) : null]);
+    var n = 0; while (n < a.length && a[n][0] < cut) n++;
+    if (n) a.splice(0, n);
+    longDirty[c.sym] = 1;
+  });
+  try { epAuto(now); } catch (e) {}
+}
+function grSeries(sym, t0, t1){
+  var m = {};
+  function add(t, p){ if (p > 0 && isFinite(t) && t >= t0 && t <= t1) m[Math.round(t / 60000)] = p; }
+  (LH[sym] || []).forEach(function(r){ add(r[0], r[1]); });
+  ((loadHist()[sym]) || []).forEach(function(x){ add(x.t, x.px); });
+  var S = [];
+  try { S = loadSigs(); } catch (e) {}
+  S.forEach(function(s){
+    if (!s || s.sym !== sym || !(s.p0 > 0)) return;
+    add(s.t, s.p0);
+    var o = s.o || {};
+    [["15m", 15], ["30m", 30], ["1h", 60], ["3h", 180]].forEach(function(q){ var v = o[q[0]]; if (typeof v === "number" && isFinite(v)) add(s.t + q[1] * 60000, s.p0 * (1 + v / 100)); });
+  });
+  return Object.keys(m).map(function(k){ return [k * 60000, m[k]]; }).sort(function(a, b){ return a[0] - b[0]; });
+}
+function grPanel(sym, t0, t1){
+  var m = {};
+  ((loadHist()[sym]) || []).forEach(function(x){ if (x.t >= t0 && x.t <= t1) m[Math.round(x.t / 60000)] = [x.t, x.vv, x.o15, x.tk, x.vx]; });
+  (LH[sym] || []).forEach(function(r){ if (r[0] >= t0 && r[0] <= t1) m[Math.round(r[0] / 60000)] = [r[0], r[5], r[3], r[6], r[4]]; });
+  return Object.keys(m).map(function(k){ return m[k]; }).sort(function(a, b){ return a[0] - b[0]; });
+}
+function grRise(pts){
+  var lo = null, best = null;
+  pts.forEach(function(q){ if (!lo || q[1] < lo[1]) lo = q; var r = q[1] / lo[1] - 1; if (!best || r > best.r) best = {r: r, lo: lo, pk: q}; });
+  return best;
+}
+function grSnap(ep){
+  ep.pts = grSeries(ep.sym, ep.t0, ep.t1);
+  ep.pr = grPanel(ep.sym, ep.t0, ep.t1);
+  var b = ep.pts.length ? grRise(ep.pts) : null;
+  ep.rise = b ? Math.round(b.r * 100) : 0;
+  if (b) { ep.pk = b.pk[1]; ep.tp = b.pk[0]; }
+}
+function epAuto(now){
+  var trig = settings.epTrig; if (!(trig > 0)) return;
+  EPS.forEach(function(ep){
+    if (!ep.open) return;
+    var a = LH[ep.sym]; if (!a || !a.length) return;
+    var last = a[a.length - 1];
+    if (now - last[0] > 900000) return;
+    ep.t1 = last[0];
+    if (last[1] > ep.pk) { ep.pk = last[1]; ep.tp = last[0]; }
+    if (now - ep.tp > 4 * 3600000) ep.open = false;
+    epDirty[ep.id] = 1;
+  });
+  Object.keys(LH).forEach(function(sym){
+    var a = LH[sym]; if (!a.length) return;
+    var last = a[a.length - 1]; if (now - last[0] > 600000) return;
+    if (EPS.some(function(e){ return e.sym === sym && (e.open || (e.auto && now - e.t1 < 6 * 3600000)); })) return;
+    var from = now - 6 * 3600000, lo = null;
+    a.forEach(function(r){ if (r[0] >= from && r[1] > 0 && (!lo || r[1] < lo[1])) lo = r; });
+    if (!lo || last[1] / lo[1] - 1 < trig / 100) return;
+    var ep = {id: sym + "_" + lo[0], sym: sym, t0: lo[0], t1: last[0], auto: true, open: true, pk: last[1], tp: last[0], rise: 0, pts: [], pr: []};
+    EPS.unshift(ep); epDirty[ep.id] = 1; grMsgT = "";
+  });
+}
+function longFlush(){
+  var d = longDirty, e = epDirty; longDirty = {}; epDirty = {};
+  var ks = Object.keys(d), ids = Object.keys(e);
+  if (!ks.length && !ids.length) return Promise.resolve();
+  var list = ks.filter(function(k){ return LH[k] && LH[k].length; }).map(function(k){ return {k: k, r: LH[k]}; });
+  var el = ids.map(function(id){ return EPS.filter(function(x){ return x.id === id; })[0]; }).filter(Boolean);
+  el.forEach(function(x){ if (x.open) { try { grSnap(x); } catch (e1) {} } });
+  return longPut("h", list).then(function(){ return longPut("ep", el); }).then(function(){ longErr = ""; }, function(err){
+    longErr = String(err && err.message || err);
+    ks.forEach(function(k){ longDirty[k] = 1; }); ids.forEach(function(k){ epDirty[k] = 1; });
+  });
+}
+setInterval(longFlush, 60000);
+document.addEventListener("visibilitychange", function(){ if (document.hidden) longFlush(); });
+window.addEventListener("pagehide", longFlush);
+function grAdd(sym, t0, t1){
+  if (!sym) return "Izberi kovanec.";
+  if (!isFinite(t0) || !isFinite(t1) || t1 <= t0) return "Obdobje ni veljavno (od mora biti pred do).";
+  var ep = {id: sym + "_" + t0 + "_m", sym: sym, t0: t0, t1: t1, auto: false, open: false, pts: [], pr: []};
+  grSnap(ep);
+  if (ep.pts.length < 3) return "Za to obdobje ni dovolj podatkov (" + ep.pts.length + " točk). Shranjeni so signali zadnjih 7 dni in posnetki od zdaj naprej.";
+  EPS = EPS.filter(function(x){ return x.id !== ep.id; }); EPS.unshift(ep);
+  EPS.sort(function(a, b){ return b.t0 - a.t0; });
+  epDirty[ep.id] = 1; longFlush();
+  return "Shranjeno: " + sym.replace(/USDT$/, "") + ", " + ep.pts.length + " točk, vzpon dno→vrh " + ep.rise + " %.";
+}
+function grFmt(a){ a = +a; return Math.abs(a) >= 1e6 ? (a / 1e6).toFixed(1) + "M" : Math.abs(a) >= 1e3 ? (a / 1e3).toFixed(0) + "k" : a.toFixed(Math.abs(a) < 10 ? 2 : 0); }
+function grDT(t){ var d = new Date(t); return d.getDate() + ". " + p2(d.getHours()) + ":" + p2(d.getMinutes()); }
+function grBuild(ep, IV, TR){
+  var pts = ep.pts || [];
+  if (pts.length < 2) return null;
+  var p0 = pts[0][1], t1 = Math.ceil(ep.t0 / (IV * 60000)) * IV * 60000, step = IV * 60000, end = pts[pts.length - 1][0];
+  var rows = [], j = 0, last = pts[0], prev = p0, peak = p0, stop = null, exited = false, exIdx = -1, ph = ep.pr || [], hj = 0, hv = null;
+  for (var t = t1; t <= end + 1; t += step) {
+    while (j < pts.length && pts[j][0] <= t) { last = pts[j]; j++; }
+    hv = null;
+    for (hj = 0; hj < ph.length; hj++) { if (ph[hj][0] <= t && t - ph[hj][0] <= step) hv = ph[hj]; }
+    var per = (last[1] / prev - 1) * 100, cum = (last[1] / p0 - 1) * 100, i = rows.length;
+    if (!exited) {
+      if (last[1] > peak) peak = last[1];
+      if (cum >= 10) stop = peak * (1 - TR / 100);
+      if (stop !== null && last[1] <= stop) { exited = true; exIdx = i; }
+    }
+    rows.push({t: t, per: per, cum: cum, gap: (t - last[0]) > step, stop: (stop !== null && (!exited || i <= exIdx)) ? stop : null, ex: i === exIdx, hv: hv});
+    prev = last[1];
+  }
+  return {rows: rows, p0: p0};
+}
+function grChart(ep, IV, TR){
+  var B = grBuild(ep, IV, TR);
+  if (!B || B.rows.length < 2) return '<div class="cap">Premalo podatkov za graf.</div>';
+  var rows = B.rows, p0 = B.p0, n = rows.length;
+  var ex = null; rows.forEach(function(r){ if (r.ex) ex = r; });
+  var pk = Math.max.apply(null, rows.map(function(r){ return r.cum; }));
+  var W = 400, H = 220, L = 38, R = 10, T = 12, Bm = 24;
+  var ys = rows.map(function(r){ return r.cum; }).concat(rows.filter(function(r){ return r.stop; }).map(function(r){ return (r.stop / p0 - 1) * 100; }), [0]);
+  var mn = Math.min.apply(null, ys), mx = Math.max.apply(null, ys), pad = (mx - mn) * .06 || 1; mn -= pad; mx += pad;
+  var x = function(i){ return L + (W - L - R) * i / (n - 1 || 1); }, y = function(v){ return T + (H - T - Bm) * (1 - (v - mn) / (mx - mn)); };
+  var s = "", stp = Math.pow(10, Math.floor(Math.log10((mx - mn) / 4))), k = [1, 2, 5, 10].map(function(m){ return m * stp; }).filter(function(m){ return (mx - mn) / m <= 6; })[0] || stp * 10;
+  for (var v = Math.ceil(mn / k) * k; v <= mx; v += k) s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="var(--line)" stroke-width="' + (v === 0 ? 1.2 : .5) + '"/><text x="' + (L - 4) + '" y="' + (y(v) + 3) + '" text-anchor="end" font-size="9" fill="var(--muted)">' + Math.round(v) + '%</text>';
+  var nt = Math.min(5, n);
+  for (var a = 0; a < nt; a++) { var ii = Math.round(a * (n - 1) / (nt - 1 || 1)); s += '<text x="' + x(ii) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="8.5" fill="var(--muted)">' + grDT(rows[ii].t) + '</text>'; }
+  var tp = ""; rows.forEach(function(r, i){ if (r.stop) tp += (tp ? "L" : "M") + x(i) + "," + y((r.stop / p0 - 1) * 100); });
+  if (tp) s += '<path d="' + tp + '" fill="none" stroke="#e0a030" stroke-width="1.6" stroke-dasharray="4 3"/>';
+  s += '<path d="' + rows.map(function(r, i){ return (i ? "L" : "M") + x(i) + "," + y(r.cum); }).join("") + '" fill="none" stroke="var(--accent)" stroke-width="1.6"/>';
+  var dot = n > 60 ? 2 : 3;
+  rows.forEach(function(r, i){ s += '<circle cx="' + x(i) + '" cy="' + y(r.cum) + '" r="' + (r.ex ? 5 : dot) + '" fill="' + (r.ex ? "var(--red)" : r.gap ? "var(--panel)" : "var(--accent)") + '" stroke="' + (r.ex ? "var(--red)" : "var(--accent)") + '" stroke-width="1.2"/>'; });
+  if (n <= 40) rows.forEach(function(r, i){ if (i && (Math.abs(r.per) >= 3 || r.ex)) s += '<text x="' + x(i) + '" y="' + (y(r.cum) + (r.per >= 0 ? -7 : 13)) + '" text-anchor="middle" font-size="8" fill="' + (r.per >= 0 ? "var(--green)" : "var(--red)") + '">' + (r.per >= 0 ? "+" : "") + r.per.toFixed(0) + '</text>'; });
+  var out = '<div class="cap" style="margin:4px 0">Vrh +' + pk.toFixed(0) + ' % · trail ' + TR + ' %: ' + (ex ? 'izstop pri ' + (ex.cum >= 0 ? "+" : "") + ex.cum.toFixed(0) + ' % (' + grDT(ex.t) + '), ' + (pk - ex.cum).toFixed(0) + ' točk pod vrhom' : 'ni sprožen') + '</div>';
+  out += '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block">' + s + '</svg>';
+  var hv = rows.filter(function(r){ return r.hv; });
+  if (hv.length) {
+    var vs = rows.map(function(r){ return r.hv ? r.hv[1] : null; }), os = rows.map(function(r){ return r.hv ? r.hv[2] : null; }), ts = rows.map(function(r){ return r.hv ? r.hv[3] : null; });
+    var mini = function(title, vals, kind, ref){
+      var H2 = 66, vv = vals.filter(function(q){ return q != null; });
+      if (!vv.length) return "";
+      var lo = Math.min.apply(null, vv.concat(ref != null ? [ref] : (kind === "bar" ? [0] : []))), hi = Math.max.apply(null, vv.concat(ref != null ? [ref] : []));
+      if (hi === lo) hi += 1;
+      var yy = function(q){ return 6 + (H2 - 12) * (1 - (q - lo) / (hi - lo)); };
+      var z = ref != null ? ref : Math.max(lo, 0);
+      var o = '<text x="' + (W - R) + '" y="9" text-anchor="end" font-size="9" fill="var(--muted)">' + title + '</text><line x1="' + L + '" x2="' + (W - R) + '" y1="' + yy(z) + '" y2="' + yy(z) + '" stroke="var(--line)"/>';
+      o += '<text x="' + (L - 4) + '" y="' + (yy(hi) + 8) + '" text-anchor="end" font-size="8" fill="var(--muted)">' + grFmt(hi) + '</text><text x="' + (L - 4) + '" y="' + yy(lo) + '" text-anchor="end" font-size="8" fill="var(--muted)">' + grFmt(lo) + '</text>';
+      var bw = Math.max(2, (W - L - R) / n * .7);
+      if (kind === "bar") vals.forEach(function(q, i){ if (q == null) return; var y0 = yy(z), y1 = yy(q); o += '<rect x="' + (x(i) - bw / 2) + '" y="' + Math.min(y0, y1) + '" width="' + bw + '" height="' + (Math.abs(y1 - y0) || 1) + '" fill="' + (title.indexOf("OI") === 0 ? (q >= 0 ? "var(--green)" : "var(--red)") : "var(--accent)") + '" opacity=".75"/>'; });
+      else { var d = ""; vals.forEach(function(q, i){ if (q != null) d += (d ? "L" : "M") + x(i) + "," + yy(q); }); o += '<path d="' + d + '" fill="none" stroke="var(--accent)" stroke-width="1.4"/>'; }
+      return '<svg viewBox="0 0 ' + W + ' ' + H2 + '" style="width:100%;height:auto;display:block">' + o + '</svg>';
+    };
+    out += mini("Promet 15 min (USDT)", vs, "bar") + mini("OI sprememba 15 min (%)", os, "bar", 0) + mini("Taker kupci/prodajalci (1,0 = enako)", ts, "line", 1);
+  } else out += '<div class="cap">Za to obdobje ni posnetkov prometa, OI in takerja (zapisujejo se od te različice naprej).</div>';
+  var vmax = Math.max.apply(null, rows.map(function(r){ return r.hv && r.hv[1] || 0; }).concat([0]));
+  var tb = '<tr><th>Čas</th><th>Obd.</th><th>Skupaj</th><th>Trail</th>' + (hv.length ? '<th>Promet</th><th>OI</th><th>Taker</th><th></th>' : '') + '</tr>';
+  rows.forEach(function(r){
+    var h = r.hv, dist = h && h[1] != null && vmax > 0 && h[1] >= vmax * .5 && r.per <= 1;
+    tb += '<tr' + (r.ex ? ' style="background:rgba(255,90,90,.12)"' : "") + '><td>' + grDT(r.t) + (r.gap ? "*" : "") + '</td><td class="' + (r.per >= 0 ? "up" : "down") + '">' + (r.per >= 0 ? "+" : "") + r.per.toFixed(1) + '</td><td>' + (r.cum >= 0 ? "+" : "") + r.cum.toFixed(1) + '</td><td>' + (r.ex ? '<span class="down">izstop</span>' : r.stop ? ((r.stop / p0 - 1) * 100).toFixed(0) + " %" : "–") + '</td>' +
+      (hv.length ? (h ? '<td>' + (h[1] != null ? grFmt(h[1]) : "–") + '</td><td class="' + (h[2] >= 0 ? "up" : "down") + '">' + (h[2] != null ? h[2] : "–") + '</td><td>' + (h[3] != null ? h[3] : "–") + '</td><td class="down">' + (dist ? "D?" : "") + '</td>' : '<td colspan="4">–</td>') : "") + '</tr>';
+  });
+  out += '<details style="margin-top:6px"><summary class="cap">Tabela po obdobjih (* = brez novega podatka, D? = velik promet in cena stoji ali pada, samo namig)</summary><div style="overflow-x:auto"><table class="pairs">' + tb + '</table></div></details>';
+  return out;
+}
+function grBtns(id, arr, cur, suf){ return arr.map(function(v){ return '<button class="' + (v === cur ? "" : "ghost ") + 'small" data-g="' + id + '" data-v="' + v + '" style="padding:0 10px">' + v + suf + '</button>'; }).join(""); }
+function grDefTime(t){ var d = new Date(t); return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) + "T" + p2(d.getHours()) + ":" + p2(d.getMinutes()); }
+function renderGr(){
+  var box = $("grlist"); if (!box || !grReady) return;
+  if ($("grctl")) $("grctl").innerHTML = '<span class="cap">Obdobje</span> ' + grBtns("iv", [15, 30], grIv, " min") + ' <span class="cap">Trail</span> ' + grBtns("tr", [10, 15, 20, 25, 35], grTr, " %");
+  var syms = {};
+  Object.keys(LH).forEach(function(k){ if (LH[k].length) syms[k] = 1; });
+  var hh = loadHist(); Object.keys(hh).forEach(function(k){ syms[k] = 1; });
+  var sel = $("grsym"), cur = sel.value, ks = Object.keys(syms).sort();
+  if (sel.getAttribute("data-n") !== String(ks.length)) { sel.innerHTML = ks.map(function(k){ return '<option value="' + esc(k) + '">' + esc(k.replace(/USDT$/, "")) + '</option>'; }).join(""); sel.setAttribute("data-n", String(ks.length)); if (cur) sel.value = cur; }
+  if (!$("grfrom").value) { $("grfrom").value = grDefTime(Date.now() - 6 * 3600000); $("grto").value = grDefTime(Date.now()); }
+  var by = {}, order = [];
+  EPS.forEach(function(ep){ if (!by[ep.sym]) { by[ep.sym] = []; order.push(ep.sym); } by[ep.sym].push(ep); });
+  var h = "";
+  if (!order.length) h = '<div class="loading">Še ni shranjenih epizod. Dodaj jo spodaj ali počakaj na samodejni sprožilec.</div>';
+  order.forEach(function(sym){
+    h += '<h2>' + esc(sym.replace(/USDT$/, "")) + ' <span class="cap">(' + by[sym].length + ')</span></h2>';
+    by[sym].forEach(function(ep){
+      if (ep.open) { try { grSnap(ep); } catch (e) {} }
+      h += '<div class="card" style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b>' + esc(grDT(ep.t0)) + ' → ' + esc(grDT(ep.t1)) + '</b><span class="cap">' + (ep.auto ? "samodejno" : "ročno") + (ep.open ? " · teče" : "") + ' · dno→vrh +' + (ep.rise || 0) + ' %</span></div>' + grChart(ep, grIv, grTr) +
+        '<div style="margin-top:6px"><button class="ghost small" data-g="del" data-v="' + esc(ep.id) + '">Izbriši</button></div></div>';
+    });
+  });
+  box.innerHTML = h;
+  var n = 0, mi = Infinity; Object.keys(LH).forEach(function(k){ n += LH[k].length; if (LH[k].length) mi = Math.min(mi, LH[k][0][0]); });
+  $("grinfo").textContent = "Dolga zgodovina: " + Object.keys(LH).length + " kovancev, " + n + " posnetkov" + (isFinite(mi) ? ", najstarejši " + grDT(mi) : "") + " (hrani se " + LONG_H + " h, zapis v IndexedDB vsako minuto). Epizod: " + EPS.length + "." + (longErr ? " Napaka: " + longErr : "");
+  $("grmsg").textContent = grMsgT;
+}
+document.addEventListener("click", function(e){
+  var b = e.target.closest && e.target.closest("[data-g]"); if (!b) return;
+  var g = b.getAttribute("data-g"), v = b.getAttribute("data-v");
+  if (g === "iv") grIv = +v; else if (g === "tr") grTr = +v;
+  else if (g === "del") {
+    EPS = EPS.filter(function(x){ return x.id !== v; }); longDel("ep", v).then(function(){}, function(){});
+  } else if (g === "q") { var hrs = +v; $("grfrom").value = grDefTime(Date.now() - hrs * 3600000); $("grto").value = grDefTime(Date.now()); return; }
+  renderGr();
+});
+$("gradd").addEventListener("click", function(){
+  grMsgT = grAdd($("grsym").value, new Date($("grfrom").value).getTime(), new Date($("grto").value).getTime());
+  renderGr();
+});
+$("grtrig").addEventListener("change", function(){ var v = num(this.value.replace(",", ".")); settings.epTrig = (v != null && v >= 0) ? v : 30; this.value = settings.epTrig; saveSettings(); });
+$("grtrig").value = settings.epTrig;
+longLoad();
+function longExport(){
+  var h = {};
+  Object.keys(LH).forEach(function(k){
+    var a = LH[k], out = [], lt = 0;
+    a.forEach(function(r, i){ if (r[0] - lt >= 14 * 60000 || i === a.length - 1) { out.push(r); lt = r[0]; } });
+    if (out.length) h[k] = out;
+  });
+  return {cols: "t,px,p15,o15,vx,vv,tk,f,ls", h: h, ep: EPS};
+}
+function longImport(o){
+  var nr = 0, ne = 0;
+  if (o && o.h && typeof o.h === "object") Object.keys(o.h).forEach(function(k){ if (Array.isArray(o.h[k])) { var b = (LH[k] || []).length; longMerge(k, o.h[k]); nr += (LH[k] || []).length - b; longDirty[k] = 1; } });
+  var ids = {}; EPS.forEach(function(x){ ids[x.id] = 1; });
+  if (o && Array.isArray(o.ep)) o.ep.forEach(function(x){ if (x && x.id && !ids[x.id] && Array.isArray(x.pts)) { EPS.push(x); ids[x.id] = 1; epDirty[x.id] = 1; ne++; } });
+  EPS.sort(function(a, b){ return b.t0 - a.t0; });
+  longFlush(); try { renderGr(); } catch (e) {}
+  return "Dolga zgodovina: " + nr + " novih posnetkov in " + ne + " epizod.";
+}
 /* ---------- celoten izvoz in uvoz ---------- */
 async function allExport(){
   if (typeof lsFlush === "function") lsFlush();
@@ -5101,6 +5407,7 @@ async function allExport(){
   var txt = "";
   try { txt = otherText(); } catch (e2) { txt = "ni bilo mogoče sestaviti: " + (e2 && e2.message); }
   try { data.ct_sig_arch = await archAll(); } catch (e3) { data.ct_sig_arch = []; }
+  try { await longFlush(); data.ct_long = longExport(); } catch (e3b) {}
   try { txt += await archText(); } catch (e4) {}
   return JSON.stringify({v: 2, app: "pregled-zetona", dev: devTag(), t: Date.now(), cas: new Date().toLocaleString("sl-SI"), ver: typeof APP_VER === "string" ? APP_VER : "glavna", data: data, text: txt});
 }
@@ -5128,6 +5435,7 @@ function allImport(text, name){
     var nb = botMerge(BST, d.ct_bot, true), nw = botMerge(BW, d.ct_botw, true);
     BST = BST.slice(-600); BW = BW.slice(-80);
     botSave(); botWSave(); try { botRender(); } catch (e3) {}
+    if (d.ct_long) { try { parts.push(longImport(d.ct_long)); } catch (eLI) {} }
     parts.push("Bot: " + nb + " zaprtih pozicij in " + nw + " zapisov opazovanja.");
     if (Array.isArray(d.ct_sig_arch) && d.ct_sig_arch.length) {
       var av = d.ct_sig_arch.filter(function(x){ return x && x.id && isFinite(x.t); });
