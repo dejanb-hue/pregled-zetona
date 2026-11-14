@@ -4376,9 +4376,17 @@ async function storeRescue(k, mk){
   } catch (e2) {}
   STORE.busy = false; try { storeBanner(); } catch (e3) {}
 }
+function storeUse(){ var n = 0; try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); n += k.length + (localStorage.getItem(k) || "").length; } } catch (e) {} return n; }
+async function storeFreeUp(){
+  if (STORE.busy || Date.now() - (STORE.lastFree || 0) < 600000) return;
+  STORE.busy = true; STORE.lastFree = Date.now();
+  try { var ds = [6, 5, 4, 3]; for (var i = 0; i < ds.length; i++) { try { await archRun(ds[i]); } catch (e) {} STORE.fixed = ds[i]; if (storeUse() < 4500000) break; } } catch (e2) {}
+  STORE.busy = false; try { storeBanner(); } catch (e3) {}
+}
 function storeBanner(){
-  var n = 0; try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); n += k.length + (localStorage.getItem(k) || "").length; } } catch (e) {}
+  var n = storeUse();
   STORE.usage = n;
+  if (n > 4700000) storeFreeUp();
   var bad = Object.keys(STORE.bad).filter(function(k){ return STORE.bad[k]; }), el = document.getElementById("storeWarn");
   if (!el) { el = document.createElement("div"); el.id = "storeWarn"; el.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:9999;padding:6px 10px;font-size:12px;color:#fff;background:#b3261e;display:none"; document.body.appendChild(el); }
   if (bad.length || n > 4700000) { el.style.display = "block"; el.textContent = (bad.length ? "⚠ Shramba brskalnika je polna, ne shranjuje se: " + bad.join(", ") + ". " : "⚠ Shramba brskalnika je skoraj polna. ") + "Zasedeno " + (n / 1e6).toFixed(2) + " M od ~5,2 M znakov." + (STORE.fixed ? " Starejši signali so bili premaknjeni v arhiv (" + STORE.fixed + " dni)." : ""); }
