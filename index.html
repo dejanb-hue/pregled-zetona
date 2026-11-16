@@ -4350,10 +4350,33 @@ function spot30Alert(r, ca){
 
 /* ---------- papirnati bot ---------- */
 var BKEY = "ct_bot", BCK = "ct_botcfg", botBusy = false;
-var BDEF = {on: true, amt: 100, fee: 0.25, stop0: 5, tStart: 5, tDist: 5, bigAt: 20, bigFac: 50, part: 10, noLower: false, trend: true, maxOpen: 3, maxH: 4, tkMin: 1, volMin: 2, oiMin: 2, cool: 60, fixTgt: 10, watch: true, watchMin: 5, watchMax: 30, wDD: 4, wUp: 0.5, hist: true, spk: 70, stagWin: 15, stagRng: 1.5, stagGain: 6, noGainMin: 20, l2At: 40, l2Pct: 15, l3At: 70, l3Pct: 15, l4At: 100, l4Pct: 25, l5At: 200, l5Pct: 10, l6At: 500, l6Pct: 10, l7At: 1000, l7Pct: 5, d1: 10, d2: 15, d3: 20, d4: 25, trB: 300, runTr: 40, lock: 40, cAt: 10, cPart: 10, cTr: 15, c2At: 30, c2Tr: 20, c3At: 60, c3Tr: 25, c4At: 100, c4Tr: 35, pxTrig: true, beEnt: true, body: true, trPos: true, dOn: true, trLo: 3, trHi: 12, tr15: 5, trOi: -2, abStop: 8, abDist: 10, eOn: true, e6: true, e24: true, e96: true, eFull: true, eVol: 1.5, eTk: 1.1, eOi: 0, eP15: 0, hzMin: 15, hzBig: 25, hzSh: 60, coolStag: 10, h3Rej: -15, sOn: true, reOn: true, reBnc: 5, reLo: 25, reRng: 2, reRngMin: 10, hOn: true, hMul: 6, hMin: 4, hMax: 15, hStop: 5, hBe: 4, hPx: 1.5, hVol: 1.5, hGain: 1, hExt: 6, hCool: 3, hNoMin: 25, hNoG: 3, gOn: true, gPx: 2.5, gMax: 7, gVol: 2, gStop: 3, gCool: 20, gN: 12, reDip: 2, reHold: 10, reEma: true, reUp: 2, reMaxN: 2, reH: 6, fOn: true, be1At: 5, sl2At: 30, sl2Pct: 15, stepP: 3, s0Tr: 8, s1At: 20, s1Tr: 10, s2At: 40, s2Tr: 15, s3At: 60, s3Tr: 20, s4At: 80, s4Tr: 25, s5At: 100, s5Tr: 35};
-var BLAB = [["on", "Bot vklopljen", 1], ["sOn", "Nova shema izstopa za vse variante (stopnice trail)", 1], ["reOn", "Ponovni vstop po stop izstopu (A–E)", 1], ["reBnc", "Ponovni vstop: odboj od dna po izstopu (%)"], ["reLo", "Ponovni vstop: zavrni, če dno pade pod izstopom za več kot (%)"], ["reDip", "Popravek pred prebojem vsaj (%)"], ["reHold", "Dno mora zdržati (min)"], ["reEma", "Vstop tudi ob EMA obratu (6 prebije 24, 5 min)", 1], ["hOn", "Varianta H: aktivno spremljanje trenda, prilagodljiv trail", 1], ["hMul", "H: pas trail stopa = toliko × povpr. 1-min razpon (30 min)"], ["hMin", "H: najmanjši pas (%)"], ["hMax", "H: največji pas (%)"], ["hStop", "H: začetni stop (%)"], ["hBe", "H: stop na vstop pri rasti (%)"], ["hPx", "H: impulz: cena 3 min vsaj (%)"], ["hVol", "H: impulz: promet vsaj (x)"], ["hGain", "H: trend: rast 10 min vsaj (%)"], ["hExt", "H: trend: največ nad EMA (%)"], ["hCool", "H: premor po izstopu (min)"], ["hNoMin", "H: brez rasti po (min)"], ["hNoG", "H: brez rasti, če vrh pod (%)"], ["gOn", "Varianta G: kratek sprožilec (skok cene + promet v 3 min), brez opazovanja", 1], ["gPx", "G: skok cene v 3 min vsaj (%)"], ["gMax", "G: ne vstopi, če je skok večji od (%)"], ["gVol", "G: promet zadnjih 3 min vsaj (x povprečja 20 min)"], ["gStop", "G: začetni stop (%)"], ["gCool", "G: premor po vstopu/izstopu istega kovanca (min)"], ["gN", "G: koliko kovancev s signalom v 3 h spremljam"], ["reRng", "Konsolidacija: razpon cene pod (%)"], ["reRngMin", "Konsolidacija: zadnjih (min)"], ["reUp", "Vstop: cena nad vrhom konsolidacije (%)"], ["reMaxN", "Največ ponovnih vstopov"], ["reH", "Ponovni vstop možen do (h po izstopu)"], ["fOn", "Varianta F: spot-only Alpha opazovanje (virtualna pozicija po pravilih C)", 1], ["be1At", "Stop na vstopno ceno pri vrhu (%)"], ["sl2At", "Druga prodaja pri rasti (%)"], ["sl2Pct", "Druga prodaja (% pozicije)"], ["stepP", "Trail se dvigne z vsako rastjo cene za (%)"], ["s0Tr", "Pas trail do prve meje (%)"], ["s1At", "Pas 2 od rasti (%)"], ["s1Tr", "Pas 2 (%)"], ["s2At", "Pas 3 od rasti (%)"], ["s2Tr", "Pas 3 (%)"], ["s3At", "Pas 4 od rasti (%)"], ["s3Tr", "Pas 4 (%)"], ["s4At", "Pas 5 od rasti (%)"], ["s4Tr", "Pas 5 (%)"], ["s5At", "Pas 6 od rasti (%)"], ["s5Tr", "Pas 6 (%)"], ["amt", "Naložba na pozicijo ($)"], ["fee", "Provizija (% na stran)"], ["stop0", "Začetni stop (% pod vstopom)"], ["tStart", "Trail se začne pri rasti (%)"], ["tDist", "Trail razdalja do praga (%)"], ["bigAt", "Lestvica 1: pri rasti (%)"], ["part", "Lestvica 1: prodaj (% pozicije)"], ["l2At", "Lestvica 2: pri rasti (%)"], ["l2Pct", "Lestvica 2: prodaj (%)"], ["l3At", "Lestvica 3: pri rasti (%)"], ["l3Pct", "Lestvica 3: prodaj (%)"], ["l4At", "Lestvica 4: pri rasti (%)"], ["l4Pct", "Lestvica 4: prodaj (%)"], ["l5At", "Lestvica 5: pri rasti (%)"], ["l5Pct", "Lestvica 5: prodaj (%)"], ["l6At", "Lestvica 6: pri rasti (%)"], ["l6Pct", "Lestvica 6: prodaj (%)"], ["l7At", "Lestvica 7: pri rasti (%)"], ["l7Pct", "Lestvica 7: prodaj (%)"], ["d1", "Trail razdalja: od lestvice 1 do 2 (%)"], ["d2", "Trail razdalja: od lestvice 2 do 4 (%)"], ["d3", "Trail razdalja: od lestvice 4 do praga (%)"], ["trB", "Prag za najširši trail (rast %)"], ["d4", "Trail razdalja nad pragom (%)"], ["runTr", "Po povrnjenem vložku: trail razdalja (%)"], ["lock", "Zaklenjen del rasti od lestvice 2 (%)"], ["noLower", "Stop se ne sme znižati", 1], ["trend", "A in C: zahtevaj trend (cena 15 min in 1 h nad 0)", 1], ["maxOpen", "Največ odprtih na različico"], ["maxH", "Največ ur v poziciji"], ["tkMin", "Taker nak/prod nad"], ["volMin", "Potrditev: rast volumna vsaj (x)"], ["oiMin", "Potrditev: OI 15 min vsaj (%)"], ["cool", "Premor po izstopu (min)"], ["cAt", "C in D: pri rasti (%) prodaj del"], ["cPart", "C in D: prodaj (% pozicije)"], ["cTr", "C in D: trail razdalja po prodaji (%)"], ["c2At", "C in D: trail širši od rasti (%)"], ["c2Tr", "C in D: trail razdalja tam (%)"], ["c3At", "C in D: še širši od rasti (%)"], ["c3Tr", "C in D: trail razdalja tam (%)"], ["c4At", "C in D: najširši od rasti (%)"], ["c4Tr", "C in D: trail razdalja tam (%)"], ["pxTrig", "Sprožilec tudi: rast cene futures (15 min, 30 min, 1 h) z OI ≥ 0", 1], ["watch", "Opazuj po signalu, vstopi šele ob odboju", 1], ["watchMin", "Opazovanje: najmanj minut"], ["watchMax", "Opazovanje: največ minut"], ["wDD", "Zavrni, če cena po signalu pade za (%)"], ["wUp", "Vstop, če je cena nad ceno signala za (%)"], ["hist", "Zgodovina: zavrni samo kratek skok", 1], ["spk", "Skok = 15 min je več kot (%) rasti 3 h (velja šele, ko je rast 3 h nad spodnjim pragom)"], ["hzMin", "Skok: preverjaj, če je rast 3 h nad (%)"], ["hzBig", "Velik premik: rast 3 h nad (%) zahteva dodatno potrditev"], ["hzSh", "Dodatna potrditev: agresivni nakupi vsaj (%)"], ["h3Rej", "Zavrni takoj, če je rast 3 h pod (%); med tem in 0 % le dodatna potrditev"], ["coolStag", "Premor po izstopu zaradi mirovanja / brez rasti (min)"], ["stagWin", "Mirovanje: okno (min)"], ["stagRng", "Mirovanje: razpon cene pod (%)"], ["stagGain", "Mirovanje velja, če vrh pod (%)"], ["noGainMin", "Izstop brez rasti po (min)"], ["body", "Svečke: samo telo in zaprte (brez senc)", 1], ["beEnt", "Po prvi prodaji: stop takoj na vstopno ceno (izklopljeno: skupni izid 0)", 1], ["trPos", "Trail pred prodajo se začne šele, ko je nad vstopno ceno", 1], ["dOn", "D: trend sprožilec vklopljen", 1], ["trLo", "D: rast 30 min najmanj (%)"], ["trHi", "D: rast 30 min največ (%)"], ["tr15", "D: rast 15 min največ (%)"], ["trOi", "D: OI 30 min najmanj (%)"], ["abStop", "A in B: začetni stop (% pod vstopom)"], ["abDist", "A in B: najožja trail razdalja (%)"], ["eOn", "E: EMA sprožilec vklopljen", 1], ["e6", "E: sproži ob EMA 6 nad 192", 1], ["e24", "E: sproži ob EMA 24 nad 192", 1], ["e96", "E: sproži ob EMA 96 nad 192", 1], ["eFull", "E: sproži ob polnem bullishu", 1], ["eVol", "E potrditev: rast volumna vsaj (x)"], ["eTk", "E potrditev: taker nak/prod vsaj"], ["eOi", "E potrditev: OI 15 min vsaj (%)"], ["eP15", "E potrditev: cena 15 min nad (%)"]];
-function botCfg(){ var o = {}, c = Object.assign({}, BDEF); try { o = JSON.parse(localStorage.getItem(BCK) || "{}"); } catch (e) {} Object.keys(BDEF).forEach(function(k){ if (typeof o[k] === typeof BDEF[k]) c[k] = o[k]; }); return c; }
+var BDEF = {on: true, amt: 100, fee: 0.25, stop0: 5, tStart: 5, tDist: 5, bigAt: 20, bigFac: 50, part: 10, noLower: false, trend: true, maxOpen: 3, maxH: 4, tkMin: 1, volMin: 2, oiMin: 2, cool: 60, fixTgt: 10, watch: true, watchMin: 5, watchMax: 30, wDD: 4, wUp: 0.5, hist: true, spk: 70, stagWin: 15, stagRng: 1.5, stagGain: 6, noGainMin: 20, l2At: 40, l2Pct: 15, l3At: 70, l3Pct: 15, l4At: 100, l4Pct: 25, l5At: 200, l5Pct: 10, l6At: 500, l6Pct: 10, l7At: 1000, l7Pct: 5, d1: 10, d2: 15, d3: 20, d4: 25, trB: 300, runTr: 40, lock: 40, cAt: 10, cPart: 10, cTr: 15, c2At: 30, c2Tr: 20, c3At: 60, c3Tr: 25, c4At: 100, c4Tr: 35, pxTrig: true, beEnt: true, body: true, trPos: true, dOn: true, trLo: 3, trHi: 12, tr15: 5, trOi: -2, abStop: 8, abDist: 10, eOn: true, e6: true, e24: true, e96: true, eFull: true, eVol: 1.5, eTk: 1.1, eOi: 0, eP15: 0, hzMin: 15, hzBig: 25, hzSh: 60, coolStag: 10, h3Rej: -15, sOn: true, reOn: true, reBnc: 5, reLo: 15, reRng: 2, reRngMin: 10, hOn: true, hMul: 6, hMin: 4, hMax: 15, hStop: 5, hBe: 4, hPx: 1.5, hVol: 1.5, hGain: 1, hExt: 6, hCool: 3, hNoMin: 25, hNoG: 3, gOn: true, gPx: 2.5, gMax: 7, gVol: 2, gStop: 3, gCool: 20, gN: 12, reDip: 2, reHold: 10, reEma: true, reUp: 2, reMaxN: 2, reH: 6, fOn: true, reNg: true, fPb: 2, fPu: 1, v37: true, be1At: 5, sl2At: 30, sl2Pct: 15, stepP: 3, s0Tr: 8, s1At: 20, s1Tr: 10, s2At: 40, s2Tr: 15, s3At: 60, s3Tr: 20, s4At: 80, s4Tr: 25, s5At: 100, s5Tr: 35};
+var BLAB = [["on", "Bot vklopljen", 1], ["sOn", "Nova shema izstopa za vse variante (stopnice trail)", 1], ["reOn", "Ponovni vstop po stop izstopu (A–E, G)", 1], ["reNg", "Ponovni vstop tudi po izstopu brez rasti / mirovanju", 1], ["reBnc", "Ponovni vstop: odboj od dna po izstopu (%)"], ["reLo", "Ponovni vstop: zavrni, če dno pade pod izstopom za več kot (%)"], ["reDip", "Popravek pred prebojem vsaj (%)"], ["reHold", "Dno mora zdržati (min)"], ["reEma", "Vstop tudi ob EMA obratu (6 prebije 24, 5 min)", 1], ["hOn", "Varianta H: aktivno spremljanje trenda, prilagodljiv trail", 1], ["hMul", "H: pas trail stopa = toliko × povpr. 1-min razpon (30 min)"], ["hMin", "H: najmanjši pas (%)"], ["hMax", "H: največji pas (%)"], ["hStop", "H: začetni stop (%)"], ["hBe", "H: stop na vstop pri rasti (%)"], ["hPx", "H: impulz: cena 3 min vsaj (%)"], ["hVol", "H: impulz: promet vsaj (x)"], ["hGain", "H: trend: rast 10 min vsaj (%); promet vsaj kot pri impulzu"], ["hExt", "H: trend: največ nad EMA (%)"], ["hCool", "H: premor po izstopu (min)"], ["hNoMin", "H: brez rasti po (min)"], ["hNoG", "H: brez rasti, če vrh pod (%)"], ["gOn", "Varianta G: kratek sprožilec (skok cene + promet v 3 min), brez opazovanja", 1], ["gPx", "G: skok cene v 3 min vsaj (%)"], ["gMax", "G: ne vstopi, če je skok večji od (%)"], ["gVol", "G: promet zadnjih 3 min vsaj (x povprečja 20 min)"], ["gStop", "G: začetni stop (%)"], ["gCool", "G: premor po vstopu/izstopu istega kovanca (min)"], ["gN", "G: koliko kovancev s signalom v 3 h spremljam"], ["reRng", "Konsolidacija: razpon cene pod (%)"], ["reRngMin", "Konsolidacija: zadnjih (min)"], ["reUp", "Vstop: cena nad vrhom konsolidacije (%)"], ["reMaxN", "Največ ponovnih vstopov"], ["reH", "Ponovni vstop možen do (h po izstopu)"], ["fOn", "Varianta F: spot-only Alpha opazovanje (virtualna pozicija po pravilih C)", 1], ["fPb", "F: vstop šele po popravku od vrha vsaj (%), 0 = izklopljeno"], ["fPu", "F: in odboju od dna popravka vsaj (%)"], ["be1At", "Stop na vstopno ceno pri vrhu (%)"], ["sl2At", "Druga prodaja pri rasti (%)"], ["sl2Pct", "Druga prodaja (% pozicije)"], ["stepP", "Trail se dvigne z vsako rastjo cene za (%)"], ["s0Tr", "Pas trail do prve meje (%)"], ["s1At", "Pas 2 od rasti (%)"], ["s1Tr", "Pas 2 (%)"], ["s2At", "Pas 3 od rasti (%)"], ["s2Tr", "Pas 3 (%)"], ["s3At", "Pas 4 od rasti (%)"], ["s3Tr", "Pas 4 (%)"], ["s4At", "Pas 5 od rasti (%)"], ["s4Tr", "Pas 5 (%)"], ["s5At", "Pas 6 od rasti (%)"], ["s5Tr", "Pas 6 (%)"], ["amt", "Naložba na pozicijo ($)"], ["fee", "Provizija (% na stran)"], ["stop0", "Začetni stop (% pod vstopom)"], ["tStart", "Trail se začne pri rasti (%)"], ["tDist", "Trail razdalja do praga (%)"], ["bigAt", "Lestvica 1: pri rasti (%)"], ["part", "Lestvica 1: prodaj (% pozicije)"], ["l2At", "Lestvica 2: pri rasti (%)"], ["l2Pct", "Lestvica 2: prodaj (%)"], ["l3At", "Lestvica 3: pri rasti (%)"], ["l3Pct", "Lestvica 3: prodaj (%)"], ["l4At", "Lestvica 4: pri rasti (%)"], ["l4Pct", "Lestvica 4: prodaj (%)"], ["l5At", "Lestvica 5: pri rasti (%)"], ["l5Pct", "Lestvica 5: prodaj (%)"], ["l6At", "Lestvica 6: pri rasti (%)"], ["l6Pct", "Lestvica 6: prodaj (%)"], ["l7At", "Lestvica 7: pri rasti (%)"], ["l7Pct", "Lestvica 7: prodaj (%)"], ["d1", "Trail razdalja: od lestvice 1 do 2 (%)"], ["d2", "Trail razdalja: od lestvice 2 do 4 (%)"], ["d3", "Trail razdalja: od lestvice 4 do praga (%)"], ["trB", "Prag za najširši trail (rast %)"], ["d4", "Trail razdalja nad pragom (%)"], ["runTr", "Po povrnjenem vložku: trail razdalja (%)"], ["lock", "Zaklenjen del rasti od lestvice 2 (%)"], ["noLower", "Stop se ne sme znižati", 1], ["trend", "A in C: zahtevaj trend (cena 15 min in 1 h nad 0)", 1], ["maxOpen", "Največ odprtih na različico"], ["maxH", "Največ ur v poziciji"], ["tkMin", "Taker nak/prod nad"], ["volMin", "Potrditev: rast volumna vsaj (x)"], ["oiMin", "Potrditev: OI 15 min vsaj (%)"], ["cool", "Premor po izstopu (min)"], ["cAt", "C in D: pri rasti (%) prodaj del"], ["cPart", "C in D: prodaj (% pozicije)"], ["cTr", "C in D: trail razdalja po prodaji (%)"], ["c2At", "C in D: trail širši od rasti (%)"], ["c2Tr", "C in D: trail razdalja tam (%)"], ["c3At", "C in D: še širši od rasti (%)"], ["c3Tr", "C in D: trail razdalja tam (%)"], ["c4At", "C in D: najširši od rasti (%)"], ["c4Tr", "C in D: trail razdalja tam (%)"], ["pxTrig", "Sprožilec tudi: rast cene futures (15 min, 30 min, 1 h) z OI ≥ 0", 1], ["watch", "Opazuj po signalu, vstopi šele ob odboju", 1], ["watchMin", "Opazovanje: najmanj minut"], ["watchMax", "Opazovanje: največ minut"], ["wDD", "Zavrni, če cena po signalu pade za (%)"], ["wUp", "Vstop, če je cena nad ceno signala za (%)"], ["hist", "Zgodovina: zavrni samo kratek skok", 1], ["spk", "Skok = 15 min je več kot (%) rasti 3 h (velja šele, ko je rast 3 h nad spodnjim pragom)"], ["hzMin", "Skok: preverjaj, če je rast 3 h nad (%)"], ["hzBig", "Velik premik: rast 3 h nad (%) zahteva dodatno potrditev"], ["hzSh", "Dodatna potrditev: agresivni nakupi vsaj (%)"], ["h3Rej", "Zavrni takoj, če je rast 3 h pod (%); med tem in 0 % le dodatna potrditev"], ["coolStag", "Premor po izstopu zaradi mirovanja / brez rasti (min)"], ["stagWin", "Mirovanje: okno (min)"], ["stagRng", "Mirovanje: razpon cene pod (%)"], ["stagGain", "Mirovanje velja, če vrh pod (%)"], ["noGainMin", "Izstop brez rasti po (min)"], ["body", "Svečke: samo telo in zaprte (brez senc)", 1], ["beEnt", "Po prvi prodaji: stop takoj na vstopno ceno (izklopljeno: skupni izid 0)", 1], ["trPos", "Trail pred prodajo se začne šele, ko je nad vstopno ceno", 1], ["dOn", "D: trend sprožilec vklopljen", 1], ["trLo", "D: rast 30 min najmanj (%)"], ["trHi", "D: rast 30 min največ (%)"], ["tr15", "D: rast 15 min največ (%)"], ["trOi", "D: OI 30 min najmanj (%)"], ["abStop", "A in B: začetni stop (% pod vstopom)"], ["abDist", "A in B: najožja trail razdalja (%)"], ["eOn", "E: EMA sprožilec vklopljen", 1], ["e6", "E: sproži ob EMA 6 nad 192", 1], ["e24", "E: sproži ob EMA 24 nad 192", 1], ["e96", "E: sproži ob EMA 96 nad 192", 1], ["eFull", "E: sproži ob polnem bullishu", 1], ["eVol", "E potrditev: rast volumna vsaj (x)"], ["eTk", "E potrditev: taker nak/prod vsaj"], ["eOi", "E potrditev: OI 15 min vsaj (%)"], ["eP15", "E potrditev: cena 15 min nad (%)"]];
+function botCfg(){ var o = {}, c = Object.assign({}, BDEF); try { o = JSON.parse(localStorage.getItem(BCK) || "{}"); } catch (e) {} Object.keys(BDEF).forEach(function(k){ if (typeof o[k] === typeof BDEF[k]) c[k] = o[k]; }); if (!o.v37 && c.reLo === 25) c.reLo = 15; c.v37 = true; return c; }
 var BCFG = botCfg();
+
+/* ---------- arhiv zaprtih pozicij bota (IndexedDB ct_botarh), da omejitev 600 nič ne zbriše ---------- */
+var BARN = 0;
+function barDb(){ return new Promise(function(res, rej){ try { var r = indexedDB.open("ct_botarh", 1); r.onupgradeneeded = function(){ r.result.createObjectStore("p", {keyPath: "id"}); }; r.onsuccess = function(){ res(r.result); }; r.onerror = function(){ rej(r.error); }; } catch (e) { rej(e); } }); }
+async function barPut(list){
+  if (!list || !list.length) return;
+  try {
+    var db = await barDb();
+    await new Promise(function(res, rej){ var tx = db.transaction("p", "readwrite"), st = tx.objectStore("p"); list.forEach(function(p){ if (p && p.id) st.put(p); }); tx.oncomplete = res; tx.onerror = function(){ rej(tx.error); }; });
+    barCount();
+  } catch (e) { STORE.barErr = String(e && e.message || e); }
+}
+async function barAll(){ try { var db = await barDb(); return await new Promise(function(res, rej){ var q = db.transaction("p").objectStore("p").getAll(); q.onsuccess = function(){ res(q.result || []); }; q.onerror = function(){ rej(q.error); }; }); } catch (e) { return []; } }
+async function barCount(){ try { var db = await barDb(); BARN = await new Promise(function(res, rej){ var q = db.transaction("p").objectStore("p").count(); q.onsuccess = function(){ res(q.result); }; q.onerror = function(){ rej(q.error); }; }); } catch (e) {} try { botRender(); } catch (e2) {} }
+function botTrim(){
+  if (BST.length <= 600) return;
+  var over = BST.slice(0, BST.length - 600).filter(function(p){ return p.st === "closed"; });
+  if (!over.length) return;
+  barPut(over);
+  var ids = {}; over.forEach(function(p){ ids[p.id] = 1; });
+  BST = BST.filter(function(p){ return !ids[p.id]; });
+}
+setTimeout(barCount, 3000);
 var CFGD = (function(){ try { var a = JSON.parse(localStorage.getItem("ct_botcfgs") || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } })(), CFGS = {}, CFGN = false, STORE = {bad: {}, busy: false, fixed: 0, usage: 0};
 CFGD.forEach(function(c, i){ CFGS[JSON.stringify(c)] = i; });
 function cfgRes(list){ list.forEach(function(p){ if (p && typeof p.cfg === "string") p.cfg = CFGD[+p.cfg.slice(1)] || Object.assign({}, BCFG); }); return list; }
@@ -4388,13 +4411,13 @@ function storeBanner(){
   STORE.usage = n;
   if (n > 4700000) storeFreeUp();
   var bad = Object.keys(STORE.bad).filter(function(k){ return STORE.bad[k]; }), el = document.getElementById("storeWarn");
-  if (!el) { el = document.createElement("div"); el.id = "storeWarn"; el.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:9999;padding:6px 10px;font-size:12px;color:#fff;background:#b3261e;display:none"; document.body.appendChild(el); }
-  if (bad.length || n > 4700000) { el.style.display = "block"; el.textContent = (bad.length ? "⚠ Shramba brskalnika je polna, ne shranjuje se: " + bad.join(", ") + ". " : "⚠ Shramba brskalnika je skoraj polna. ") + "Zasedeno " + (n / 1e6).toFixed(2) + " M od ~5,2 M znakov." + (STORE.fixed ? " Starejši signali so bili premaknjeni v arhiv (" + STORE.fixed + " dni)." : ""); }
+  if (!el) { el = document.createElement("div"); el.id = "storeWarn"; el.style.cssText = "padding:6px 10px;font-size:12px;color:#fff;background:#b3261e;display:none;cursor:pointer"; el.onclick = function(){ STORE.dis = true; el.style.display = "none"; }; document.body.insertBefore(el, document.body.firstChild); }
+  if ((bad.length || n > 4700000) && !(STORE.dis && !bad.length)) { el.style.display = "block"; el.textContent = (bad.length ? "⚠ Shramba brskalnika je polna, ne shranjuje se: " + bad.join(", ") + ". " : "⚠ Shramba brskalnika je skoraj polna. ") + "Zasedeno " + (n / 1e6).toFixed(2) + " M od ~5,2 M znakov." + (STORE.fixed ? " Starejši signali so bili premaknjeni v arhiv (" + STORE.fixed + " dni)." : ""); }
   else el.style.display = "none";
 }
 setInterval(storeBanner, 20000);
 var BST = (function(){ try { var a = JSON.parse(localStorage.getItem(BKEY) || "[]"); return cfgRes(Array.isArray(a) ? a : []); } catch (e) { return []; } })();
-function botSave(){ lsSave(BKEY, function(){ return JSON.stringify(cfgPack(BST.slice(-600))); }); }
+function botSave(){ botTrim(); lsSave(BKEY, function(){ return JSON.stringify(cfgPack(BST.slice(-600))); }); }
 function blog(p, t, txt){ p.log = p.log || []; if (p.log.length < 40) p.log.push([t, txt]); }
 function botTrig(c, sp, src, only){
   if (!BCFG.on || !c.kl || !(c.kl.last > 0)) return;
@@ -4504,13 +4527,15 @@ function botWStep(w, k, fresh){
   if (cf.body) { h = Math.max(o, cl); l = Math.min(o, cl); }
   w.cs.push([k[0], o, h, l, cl, pf(k[7]) || 0, pf(k[10]) || 0]); w.cs = w.cs.slice(-15);
   w.lo = Math.min(w.lo, l); w.hi = Math.max(w.hi, h); w.n++; w.last = cl;
+  if (w.alpha) { if (w.ahi == null) { w.ahi = Math.max(w.px0, h); w.apl = w.ahi; } if (h > w.ahi) { w.ahi = h; w.apl = h; } else if (l < w.apl) w.apl = l; }
   var dd = (w.lo / w.px0 - 1) * 100, up = (cl / w.px0 - 1) * 100, n = w.cs.length;
   if (dd <= -cf.wDD) return botWEnd(w, "reject", "cena je po signalu padla " + sgn(dd) + " (prag −" + fr(cf.wDD) + " %), brez odboja", k[0] + 60000);
   if (w.n < cf.watchMin) return;
   var l3 = w.cs.slice(-3), qv = l3.reduce(function(a, c){ return a + c[5]; }, 0), tb = l3.reduce(function(a, c){ return a + c[6]; }, 0), sh = qv > 0 ? tb / qv : null;
   var c1 = up >= cf.wUp, c2 = (n < 3 || cl >= w.cs[n - 3][4]) && cl >= o, c3 = w.alpha || sh == null || sh >= 0.5;
   var hzNeed = w.hz && w.hz.need, hzOk = !hzNeed || (sh != null && sh >= (cf.hzSh == null ? 60 : cf.hzSh) / 100 && !/brez potrditve/.test((w.en && w.en.noAC) || ""));
-  if (c1 && c2 && c3 && hzOk) {
+  var cP = !w.alpha || !(cf.fPb > 0) || (w.apl > 0 && (w.ahi / w.apl - 1) * 100 >= cf.fPb && cl >= w.apl * (1 + (cf.fPu == null ? 1 : cf.fPu) / 100));
+  if (c1 && c2 && c3 && cP && hzOk) {
     if (!fresh) return;
     var en = Object.assign({}, w.en, {w: {px0: w.px0, t: w.t, n: w.n, lo: dd, up: up, sh: sh, hz: w.hz && w.hz.txt}});
     botWEnd(w, "enter", "po " + w.n + " min: cena " + sgn(up) + " od signala (najnižje " + sgn(dd) + "), zadnje 3 svečke zelene/rastoče, agresivni nakupi " + ((sh == null || w.alpha) ? "– (Alpha: ni podatka)" : Math.round(sh * 100) + " %") + " prometa", k[0] + 60000);
@@ -4520,7 +4545,7 @@ function botWStep(w, k, fresh){
     if (rw) alphaTkGet(rw, true).then(function(a){ if (!a) return; BST.forEach(function(p){ if (p.sym === w.sym && p.st === "open" && p.en && !p.en.ak2 && Date.now() - p.t < 60000) p.en.ak2 = a; }); botSave(); }).catch(function(){});
     return;
   }
-  if (w.n >= cf.watchMax) botWEnd(w, "reject", "po " + w.n + " min ni potrditve odboja: " + [c1 ? "" : "cena " + sgn(up) + " pod pragom +" + fr(cf.wUp) + " %", c2 ? "" : "ni rastoče zelene svečke", c3 ? "" : "agresivni nakupi " + Math.round(sh * 100) + " % < 50 %", (c1 && c2 && c3 && !hzOk) ? "dodatna potrditev manjka (" + (w.hz && w.hz.txt || "") + ")" : ""].filter(Boolean).join(", "), k[0] + 60000);
+  if (w.n >= cf.watchMax) botWEnd(w, "reject", "po " + w.n + " min ni potrditve odboja: " + [c1 ? "" : "cena " + sgn(up) + " pod pragom +" + fr(cf.wUp) + " %", c2 ? "" : "ni rastoče zelene svečke", c3 ? "" : "agresivni nakupi " + Math.round(sh * 100) + " % < 50 %", cP ? "" : "ni popravka od vrha vsaj " + fr(cf.fPb) + " % z odbojem " + fr(cf.fPu == null ? 1 : cf.fPu) + " %", (c1 && c2 && c3 && cP && !hzOk) ? "dodatna potrditev manjka (" + (w.hz && w.hz.txt || "") + ")" : ""].filter(Boolean).join(", "), k[0] + 60000);
 }
 function botOpen(v, c, px, ctx, row, en, reent){
   var now = Date.now(), mine = BST.filter(function(p){ return p.v === v; });
@@ -4546,7 +4571,7 @@ function botClose(p, px, why, t, k){
   if (why === "stop" && c && c.o < p.stop) txt += " (svečka se je odprla pod stopom, izstop po odprtju)";
   p.ex = {gw: botTot(p, px).gw, t: t || null, g: g, dd: (px > 0 && p.peak > 0) ? (px / p.peak - 1) * 100 : null, tp: p.tp || null, gross: (px / p.e - 1) * 100, txt: txt, c: c, tr: !!p.tr};
   blog(p, p.t1, "izstop: " + txt);
-  if (why === "stop") { try { botReAdd(p, px); } catch (e) {} }
+  if (why === "stop" || ((why === "brez rasti" || why === "mirovanje") && BCFG.reNg !== false)) { try { botReAdd(p, px); } catch (e) {} }
 }
 function botCDist(p, f){
   var g = (p.peak / p.e - 1) * 100;
@@ -4589,9 +4614,17 @@ function botTot(p, px){
   var net = (pf * r(pp) + (1 - pf) * r(px)) * 100, gw = (pf * (pp / p.e - 1) + (1 - pf) * (px / p.e - 1)) * 100, amt = (p.cfg && p.cfg.amt) || BCFG.amt;
   return {gw: gw, net: net, eur: net / 100 * amt, g: (p.peak / p.e - 1) * 100};
 }
+function botLive(p, kf){
+  // živa (še ne zaprta) svečka: njena trenutna cena je bila v tej minuti telo, zato šteje v vrh; senca nad njo ne
+  if (!p || p.st !== "open" || !p.cfg || !p.cfg.body || !kf || kf[0] < p.k0 || kf[0] + 60000 <= Date.now()) return false;
+  var lc = pf(kf[4]);
+  if (lc > p.peak) { p.peak = lc; p.tp = Date.now(); p.pkl = lc; return true; }
+  return false;
+}
 function botStep(p, k){
   var f = p.cfg, o = pf(k[1]), h = pf(k[2]), l = pf(k[3]), cl = pf(k[4]);
   if (!(o > 0)) return;
+  if (pf(k[2]) > (p.pkw || 0)) p.pkw = pf(k[2]);
   if (f.body) { h = Math.max(o, cl); l = Math.min(o, cl); }
   if (p.qt === k[0] && p.qv && p.qv.length) p.qv[p.qv.length - 1] = pf(k[7]) || 0; else p.qv = (p.qv || []).concat([pf(k[7]) || 0]).slice(-12);
   p.qt = k[0];
@@ -4704,6 +4737,7 @@ function botLines(p){
   L.push("Skupaj cela pozicija" + (p.st === "open" ? " (zdaj)" : "") + ": rast od vstopa do vrha " + sgn(T0.g) + " · bruto " + sgn(T0.gw) + " · neto " + sgn(T0.net) + " = " + (T0.eur >= 0 ? "+" : "") + fr(T0.eur) + " € (vložek " + fr((p.cfg && p.cfg.amt) || BCFG.amt) + " €)");
   var SIB = BST.filter(function(q2){ return q2.sym === p.sym && Math.abs(q2.t - p.t) < 120000; }).sort(function(a, b){ return a.v < b.v ? -1 : 1; });
   if (SIB.length > 1) L.push("Isti signal po variantah: " + SIB.map(function(q2){ var t2 = botTot(q2, q2.st === "open" ? q2.last : q2.x); return q2.v + " " + sgn(t2.net) + " (" + (t2.eur >= 0 ? "+" : "") + fr(t2.eur) + " €, vrh " + sgn(t2.g) + (q2.st === "open" ? ", odprta" : "") + ")"; }).join(" · "));
+  if (p.pkw > 0 && p.peak > 0) L.push("Vrh (telo / živa cena) " + P(p.peak) + " (" + sgn((p.peak / p.e - 1) * 100) + " od vstopa) · najvišja senca " + P(p.pkw) + " (" + sgn((p.pkw / p.e - 1) * 100) + ")" + (p.pkw > p.peak * 1.005 ? " · senca nad vrhom ni bila telo, ne šteje" : ""));
   if (X) {
     L.push("Izstop " + fdt(p.t1) + ": cena " + P(p.x) + " · razlog: " + X.txt);
     if (X.c) L.push("Svečka izstopa " + (X.t ? hhmm(X.t) : "") + ": O " + P(X.c.o) + " H " + P(X.c.h) + " L " + P(X.c.l) + " C " + P(X.c.c) + " · promet " + usd(X.c.qv) + (X.c.vr != null ? " (" + fr(X.c.vr) + "x prejšnjih 5 min)" : "") + (X.c.tbr != null ? " · agresivni nakupi " + Math.round(X.c.tbr * 100) + " % prometa" : ""));
@@ -4869,7 +4903,7 @@ function botHEval(k, f){
   else if (c[n] < hi10) why = "ni nov 10-min vrh";
   else if (g3 > f.gMax) why = "prepozno: skok 3 min " + sgn(g3) + " > " + fr(f.gMax) + " %";
   else if (g3 >= f.hPx && vx >= f.hVol) how = "impulz: cena 3 min " + sgn(g3) + ", promet " + fr(vx) + "x";
-  else if (e30 > e120 && c[n] > e30 && g10 >= f.hGain && c[n] <= e30 * (1 + f.hExt / 100)) how = "trend: EMA30 > EMA120 (≈ EMA 6/24 na 5 min), cena nad EMA, 10 min " + sgn(g10) + ", nov vrh";
+  else if (e30 > e120 && c[n] > e30 && g10 >= f.hGain && c[n] <= e30 * (1 + f.hExt / 100) && vx >= f.hVol) how = "trend: EMA30 > EMA120 (≈ EMA 6/24 na 5 min), cena nad EMA, 10 min " + sgn(g10) + ", promet " + fr(vx) + "x, nov vrh";
   else why = "ni impulza ali trenda (3 min " + sgn(g3) + ", promet " + fr(vx) + "x, EMA " + (e30 > e120 ? "navzgor" : "navzdol") + ")";
   return {ok: !!how, why: why, how: how, px: c[n], g3: g3, vx: vx, rg: rg};
 }
@@ -4954,6 +4988,7 @@ async function botTick(){
       var k = await botKl(p, 1500);
       if (!Array.isArray(k)) return;
       for (var i = 0; i < k.length && p.st === "open"; i++) { if (k[i][0] === p.k0) continue; if (p.cfg.body && k[i][0] + 60000 > Date.now()) break; botStep(p, k[i]); p.kt = k[i][0]; }
+      if (p.st === "open") botLive(p, k[k.length - 1]);
       if (p.st === "open" && Date.now() - p.t >= p.cfg.maxH * 3600000 * (p.rec ? 28 : 1)) botClose(p, p.last, "čas", 0);
     });
     botSave();
@@ -4991,6 +5026,7 @@ function botRender(){
   if (rl) rl.innerHTML = RW.length ? scTbl(["Izstop", "Raz.", "Kov.", "Stanje", "Razlog"], RW.slice(-20).reverse().map(function(w){
     return [esc(hhmm(w.t1)), w.v, esc(w.label), esc(w.st === "watch" ? "čaka (" + w.ph + "/2)" : w.st === "enter" ? "vstop" : "zavrnjen"), '<small>' + esc(w.why || "") + '</small>'];
   })) + '<div class="cap">Po izstopu s stopom bot spremlja padec. Ko odboj od dna doseže +' + fr(BCFG.reBnc) + ' % in dno zdrži ' + BCFG.reHold + ' min, vstopi ob prvem od: (1) preboj vrha po popravku ≥ ' + fr(BCFG.reDip) + ' % (višje dno, +' + fr(BCFG.reUp) + ' %, zelena sveča), (2) konsolidacija (razpon < ' + fr(BCFG.reRng) + ' % v ' + BCFG.reRngMin + ' min) in preboj, (3) EMA 6 prebije EMA 24 (5 min). Novo dno razveljavi stanje. Največ ' + BCFG.reMaxN + ' ponovna vstopa v ' + BCFG.reH + ' h.</div>' : '<div class="loading">Ni ponovnih vstopov v čakalnici.</div>';
+  if (rl) rl.innerHTML += '<div class="cap">Arhiv zaprtih pozicij (starejše od zadnjih 600): ' + BARN + ' · v celotnem izvozu</div>';
   var wl = $("botwatch");
   if (wl) wl.innerHTML = BW.length ? scTbl(["Signal", "Kov.", "Cena", "Stanje", "Razlog"], BW.slice(-20).reverse().map(function(w){
     return [esc(hhmm(w.t)), esc(w.label), esc(price(w.px0)), esc(w.st === "watch" ? "opazuje " + w.n + " min" : w.st === "enter" ? "vstop" : "zavrnjen"), '<small>' + esc(w.why || (w.hz ? w.hz.txt : "")) + '</small>'];
@@ -5680,6 +5716,7 @@ async function allExport(){
     if ((k === "ct_bot" || k === "ct_botw" || k === "ct_rew") && Array.isArray(v)) v = cfgRes(v);
     data[k] = v;
   }
+  try { var ba = await barAll(); if (ba.length) data.ct_bot_arch = ba; } catch (eBa) {}
   var txt = "";
   try { txt = otherText(); } catch (e2) { txt = "ni bilo mogoče sestaviti: " + (e2 && e2.message); }
   try { data.ct_sig_arch = await archAll(); } catch (e3) { data.ct_sig_arch = []; }
@@ -5709,9 +5746,10 @@ function allImport(text, name){
   var parts = [$("iomsg").textContent];
   if (d) {
     var nb = botMerge(BST, d.ct_bot, true), nw = botMerge(BW, d.ct_botw, true);
-    BST = BST.slice(-600); BW = BW.slice(-80);
+    botTrim(); BW = BW.slice(-80);
     try { var rid = {}, nr2 = 0; RW.forEach(function(x){ rid[x.id] = 1; }); (Array.isArray(d.ct_rew) ? d.ct_rew : []).forEach(function(x){ if (x && x.id && !rid[x.id] && x.st !== "watch") { RW.push(x); rid[x.id] = 1; nr2++; } }); RW = RW.slice(-60); botRSave(); } catch (e3r) {}
     botSave(); botWSave(); try { botRender(); } catch (e3) {}
+    if (Array.isArray(d.ct_bot_arch) && d.ct_bot_arch.length) { barPut(d.ct_bot_arch.filter(function(x){ return x && x.id && x.st === "closed"; })); parts.push("Arhiv pozicij bota: " + d.ct_bot_arch.length + "."); }
     if (d.ct_long) { try { parts.push(longImport(d.ct_long)); } catch (eLI) {} }
     parts.push("Bot: " + nb + " zaprtih pozicij in " + nw + " zapisov opazovanja.");
     if (Array.isArray(d.ct_sig_arch) && d.ct_sig_arch.length) {
