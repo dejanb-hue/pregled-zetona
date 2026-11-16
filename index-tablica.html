@@ -321,6 +321,9 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="card settings" id="botset"></div>
   <div class="row" style="margin-top:8px"><button class="ghost small" id="botrun">Osveži</button><button class="ghost small" id="botexp">Kopiraj zapise</button><button class="ghost small" id="botfile">Datoteka</button><button class="ghost small" id="botlong">Počisti dolge</button><button class="ghost small" id="botclr">Počisti</button></div>
   <div class="stat" id="botmsg" style="margin-top:6px"></div>
+  <details class="card" id="botall" style="margin-top:8px;padding:8px 10px"><summary id="botallsum" style="cursor:pointer;font-weight:600">Skupni seštevek</summary>
+    <div class="row" style="margin:8px 0;gap:10px;align-items:center;flex-wrap:wrap"><select id="botallper"></select><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="botallnm"><span>brez največje pozicije</span></label></div>
+    <div id="botallout" style="overflow-x:auto"></div></details>
   <h2>Povzetek po različicah</h2><div class="card" id="botsum" style="overflow-x:auto"></div>
   <h2>Opazovanje po signalu</h2><div class="card" id="botwatch" style="overflow-x:auto"></div>
   <h2>Ponovni vstop (čakalnica)</h2><div class="card" id="botre" style="overflow-x:auto"></div>
@@ -3525,7 +3528,7 @@ $("cpcoin").addEventListener("click", async function(){
   t += await futText();
   copyText(t, "Kopirano: podatki žetona + futures");
 });
-$("cpother").addEventListener("click", function(){ copyText(otherText(), "Kopirano: ostali podatki"); });
+$("cpother").addEventListener("click", function(){ var b = ""; try { b = botAllTxtNow(); } catch (e) {} copyText(b + otherText(), "Kopirano: ostali podatki"); });
 
 $("twin").addEventListener("input", updateWarn);
 loadSettings();
@@ -5086,6 +5089,101 @@ function botText(){
   BST.slice(-60).forEach(function(p){ s += p.id + "\n" + botLines(p).map(function(l){ return "  " + l; }).join("\n") + "\n"; });
   return s;
 }
+/* ---------- skupni seštevek bota (zadnjih 600 + arhiv IndexedDB) ---------- */
+var BALL = {per: "n13", nomax: false}, ARCL = null, ARCN = -1, ARCB = false, BNEW = new Date(2026, 10, 13).getTime();
+var BPER = [["n13", "Od 13. 11. (nova pravila)"], ["d0", "Danes"], ["h24", "Zadnjih 24 h"], ["d7", "Zadnjih 7 dni"], ["all", "Vse"]];
+function bPerName(per){ var r = BPER.filter(function(x){ return x[0] === per; })[0]; return r ? r[1] : per; }
+function bEt(v){ return v == null ? "–" : (v < 0 ? "−" : "+") + fr(Math.abs(v)) + " €"; }
+function bEv(v){ return v == null ? "–" : '<span class="' + (v < 0 ? "down" : "up") + '">' + esc(bEt(v)) + '</span>'; }
+function bPc(v){ return v == null ? "–" : Math.round(v) + " %"; }
+function botAmt(p){ return (p.cfg && typeof p.cfg === "object" && p.cfg.amt) || BCFG.amt || 100; }
+function botAllList(){
+  var seen = {}, out = [];
+  BST.forEach(function(p){ seen[p.id] = 1; out.push(p); });
+  (ARCL || []).forEach(function(p){ if (p && p.id && !seen[p.id]) { seen[p.id] = 1; out.push(p); } });
+  return out;
+}
+function botPerFrom(per){
+  var n = Date.now();
+  return per === "n13" ? BNEW : per === "d0" ? new Date(new Date().setHours(0, 0, 0, 0)).getTime() : per === "h24" ? n - 86400000 : per === "d7" ? n - 7 * 86400000 : 0;
+}
+function botAgg(a){
+  var n = a.length, eur = 0, w = 0, sn = 0;
+  a.forEach(function(p){ eur += p.net / 100 * botAmt(p); sn += p.net; if (p.net > 0) w++; });
+  return {n: n, eur: eur, avg: n ? sn / n : null, win: n ? w / n * 100 : null};
+}
+function botAllCalc(per, nomax){
+  var from = botPerFrom(per), all = botAllList().filter(function(p){ return p.t >= from; });
+  var cl = all.filter(function(p){ return p.st === "closed" && typeof p.net === "number" && isFinite(p.net); }), op = all.filter(function(p){ return p.st === "open"; }), big = null;
+  if (nomax && cl.length) { big = cl[0]; cl.forEach(function(p){ if (p.net * botAmt(p) > big.net * botAmt(big)) big = p; }); cl = cl.filter(function(p){ return p !== big; }); }
+  var wend = function(p){ var x = new Date(p.t).getDay(); return x === 0 || x === 6; }, byV = [], wk = [], opV = [];
+  ["A", "B", "C", "D", "E", "F", "G", "H"].forEach(function(v){
+    var c = cl.filter(function(p){ return p.v === v; }), o = op.filter(function(p){ return p.v === v; });
+    if (!c.length && !o.length) return;
+    var g = botAgg(c), nets = c.map(function(p){ return p.net; });
+    g.v = v; g.best = nets.length ? Math.max.apply(null, nets) : null; g.worst = nets.length ? Math.min.apply(null, nets) : null; byV.push(g);
+    wk.push({v: v, t: botAgg(c.filter(function(p){ return !wend(p); })), e: botAgg(c.filter(wend))});
+    opV.push({v: v, n: o.length, eur: o.reduce(function(a, p){ return a + botTot(p, p.last).eur; }, 0)});
+  });
+  var rs = {}; cl.forEach(function(p){ var k = p.why || "–"; (rs[k] = rs[k] || []).push(p); });
+  var byR = Object.keys(rs).map(function(k){ var g = botAgg(rs[k]); g.k = k; return g; }).sort(function(a, b){ return b.n - a.n; });
+  return {per: per, tot: botAgg(cl), byV: byV, wk: wk, tw: botAgg(cl.filter(function(p){ return !wend(p); })), te: botAgg(cl.filter(wend)), byR: byR,
+    first: botAgg(cl.filter(function(p){ return !(p.re > 0); })), re: botAgg(cl.filter(function(p){ return p.re > 0; })), op: opV, opN: op.length, opEur: opV.reduce(function(a, x){ return a + x.eur; }, 0),
+    big: big ? {label: big.label, v: big.v, eur: big.net / 100 * botAmt(big)} : null};
+}
+function botAllHtml(c){
+  var H = function(t){ return '<div class="cap"><b>' + esc(t) + '</b></div>'; };
+  var s = '<div class="cap">' + c.tot.n + ' zaprtih · ' + bEv(c.tot.eur) + ' · povpr. ' + cv(c.tot.avg) + ' · zmage ' + esc(bPc(c.tot.win)) + ' · odprtih ' + c.opN + ' (zdaj ' + bEv(c.opN ? c.opEur : null) + ')' + (c.big ? ' · izločena največja: ' + esc(c.big.label + " " + c.big.v + " " + bEt(c.big.eur)) : "") + '</div>';
+  if (!c.tot.n) return s + '<div class="loading">V tem obdobju ni zaprtih pozicij.</div>';
+  s += H("Po različicah") + scTbl(["Raz.", "Poz.", "Neto €", "Povpr.", "Zmage", "Najb. / najsl."], c.byV.map(function(g){ return [g.v, String(g.n), g.n ? bEv(g.eur) : "–", cv(g.avg), esc(bPc(g.win)), g.n ? cv(g.best) + " / " + cv(g.worst) : "–"]; }));
+  s += H("Teden proti vikendu (po dnevu vstopa)") + scTbl(["Raz.", "Teden", "Povpr.", "Neto €", "Vikend", "Povpr.", "Neto €"],
+    c.wk.map(function(x){ return [x.v, String(x.t.n), cv(x.t.avg), x.t.n ? bEv(x.t.eur) : "–", String(x.e.n), cv(x.e.avg), x.e.n ? bEv(x.e.eur) : "–"]; }).concat([["Vse", String(c.tw.n), cv(c.tw.avg), c.tw.n ? bEv(c.tw.eur) : "–", String(c.te.n), cv(c.te.avg), c.te.n ? bEv(c.te.eur) : "–"]]));
+  s += H("Po razlogu izstopa") + scTbl(["Razlog", "Poz.", "Povpr.", "Neto €"], c.byR.map(function(g){ return [esc(g.k), String(g.n), cv(g.avg), bEv(g.eur)]; }));
+  s += H("Prvi proti ponovnemu vstopu") + scTbl(["Vstop", "Poz.", "Povpr.", "Neto €"], [["Prvi", String(c.first.n), cv(c.first.avg), c.first.n ? bEv(c.first.eur) : "–"], ["Ponovni", String(c.re.n), cv(c.re.avg), c.re.n ? bEv(c.re.eur) : "–"]]);
+  if (c.opN) s += H("Odprte pozicije") + scTbl(["Raz.", "Odprte", "Zdaj"], c.op.filter(function(x){ return x.n; }).map(function(x){ return [x.v, String(x.n), bEv(x.eur)]; }));
+  return s;
+}
+function botAllTxt(c){
+  var s = "== " + bPerName(c.per) + " ==\nSkupno: " + c.tot.n + " zaprtih · neto " + bEt(c.tot.eur) + " · povpr. " + (c.tot.avg == null ? "–" : sgn(c.tot.avg)) + " · zmage " + bPc(c.tot.win) + " · odprtih " + c.opN + " (zdaj " + (c.opN ? bEt(c.opEur) : "–") + ")\n";
+  if (!c.tot.n) return s;
+  s += "Po različicah (raz | poz | neto € | povpr. % | zmage | najboljša % | najslabša %)\n";
+  c.byV.forEach(function(g){ s += [g.v, g.n, g.n ? bEt(g.eur) : "–", g.avg == null ? "–" : sgn(g.avg), bPc(g.win), g.best == null ? "–" : sgn(g.best), g.worst == null ? "–" : sgn(g.worst)].join(" | ") + "\n"; });
+  s += "Teden proti vikendu (raz | teden poz | povpr. % | € | vikend poz | povpr. % | €)\n";
+  c.wk.forEach(function(x){ s += [x.v, x.t.n, x.t.avg == null ? "–" : sgn(x.t.avg), x.t.n ? bEt(x.t.eur) : "–", x.e.n, x.e.avg == null ? "–" : sgn(x.e.avg), x.e.n ? bEt(x.e.eur) : "–"].join(" | ") + "\n"; });
+  s += ["Vse", c.tw.n, c.tw.avg == null ? "–" : sgn(c.tw.avg), c.tw.n ? bEt(c.tw.eur) : "–", c.te.n, c.te.avg == null ? "–" : sgn(c.te.avg), c.te.n ? bEt(c.te.eur) : "–"].join(" | ") + "\n";
+  s += "Po razlogu izstopa (razlog | poz | povpr. % | €)\n";
+  c.byR.forEach(function(g){ s += [g.k, g.n, g.avg == null ? "–" : sgn(g.avg), bEt(g.eur)].join(" | ") + "\n"; });
+  s += "Prvi vstop: " + c.first.n + " poz · " + (c.first.avg == null ? "–" : sgn(c.first.avg)) + " · " + (c.first.n ? bEt(c.first.eur) : "–") + " ; ponovni vstop: " + c.re.n + " poz · " + (c.re.avg == null ? "–" : sgn(c.re.avg)) + " · " + (c.re.n ? bEt(c.re.eur) : "–") + "\n";
+  if (c.opN) s += "Odprte (raz | št. | zdaj): " + c.op.filter(function(x){ return x.n; }).map(function(x){ return x.v + " " + x.n + " " + bEt(x.eur); }).join(" ; ") + "\n";
+  return s;
+}
+function botAllTxtNow(){
+  var s = "--- SKUPNI SEŠTEVEK BOTA (zadnjih " + BST.length + " pozicij v pomnilniku + " + (ARCL ? ARCL.length : 0) + " iz arhiva; neto € = neto % × vložek pozicije) ---\n";
+  ["n13", "all", "d7", "h24"].forEach(function(per){
+    s += botAllTxt(botAllCalc(per, false));
+    var c2 = botAllCalc(per, true);
+    if (c2.big) s += "Brez največje pozicije (" + c2.big.label + " " + c2.big.v + " " + bEt(c2.big.eur) + "): " + c2.tot.n + " zaprtih · neto " + bEt(c2.tot.eur) + " · povpr. " + (c2.tot.avg == null ? "–" : sgn(c2.tot.avg)) + "\n";
+    s += "\n";
+  });
+  return s;
+}
+async function botAllTxtAll(){
+  try { var l = await barAll(); ARCL = Array.isArray(l) ? l : []; ARCN = BARN; } catch (e) {}
+  try { return botAllTxtNow(); } catch (e2) { return "--- skupni seštevek ni bil sestavljen: " + (e2 && e2.message) + " ---\n"; }
+}
+function botAllDraw(){
+  var d = $("botall"); if (!d) return;
+  var c = botAllCalc(BALL.per, BALL.nomax);
+  $("botallsum").textContent = "Skupni seštevek · " + c.tot.n + " poz. · " + bEt(c.tot.eur) + (c.tot.avg == null ? "" : " · " + sgn(c.tot.avg));
+  if (d.open) $("botallout").innerHTML = botAllHtml(c);
+}
+function botAllRefresh(){
+  if ((ARCL === null || ARCN !== BARN) && !ARCB) {
+    ARCB = true;
+    barAll().then(function(l){ ARCL = Array.isArray(l) ? l : []; ARCN = BARN; ARCB = false; botAllDraw(); }).catch(function(){ ARCL = []; ARCN = BARN; ARCB = false; });
+  }
+  try { botAllDraw(); } catch (e) {}
+}
 function botRender(){
   var bs = $("botset");
   if (!bs) return;
@@ -5107,6 +5205,7 @@ function botRender(){
     return [esc(hhmm(w.t1)), w.v, esc(w.label), esc(w.st === "watch" ? "čaka (" + w.ph + "/2)" : w.st === "enter" ? "vstop" : "zavrnjen"), '<small>' + esc(w.why || "") + '</small>'];
   })) + '<div class="cap">Po izstopu s stopom bot spremlja padec. Ko odboj od dna doseže +' + fr(BCFG.reBnc) + ' % in dno zdrži ' + BCFG.reHold + ' min, vstopi ob prvem od: (1) preboj vrha po popravku ≥ ' + fr(BCFG.reDip) + ' % (višje dno, +' + fr(BCFG.reUp) + ' %, zelena sveča), (2) konsolidacija (razpon < ' + fr(BCFG.reRng) + ' % v ' + BCFG.reRngMin + ' min) in preboj, (3) EMA 6 prebije EMA 24 (5 min). Novo dno razveljavi stanje. Največ ' + BCFG.reMaxN + ' ponovna vstopa v ' + BCFG.reH + ' h.</div>' : '<div class="loading">Ni ponovnih vstopov v čakalnici.</div>';
   if (rl) rl.innerHTML += '<div class="cap">Arhiv zaprtih pozicij (starejše od zadnjih 600): ' + BARN + ' · v celotnem izvozu</div>';
+  botAllRefresh();
   var wl = $("botwatch");
   if (wl) wl.innerHTML = BW.length ? scTbl(["Signal", "Kov.", "Cena", "Stanje", "Razlog"], BW.slice(-20).reverse().map(function(w){
     return [esc(hhmm(w.t)), esc(w.label), esc(price(w.px0)), esc(w.st === "watch" ? "opazuje " + w.n + " min" : w.st === "enter" ? "vstop" : "zavrnjen"), '<small>' + esc(w.why || (w.hz ? w.hz.txt : "")) + '</small>'];
@@ -5122,6 +5221,13 @@ document.addEventListener("change", function(e){
   $("botmsg").textContent = "Shranjeno. Velja za nove pozicije.";
 });
 $("botrun").addEventListener("click", botTick);
+(function(){
+  var sel = $("botallper"); if (!sel) return;
+  sel.innerHTML = BPER.map(function(x){ return '<option value="' + x[0] + '">' + esc(x[1]) + '</option>'; }).join("");
+  sel.addEventListener("change", function(){ BALL.per = sel.value; botAllDraw(); });
+  $("botallnm").addEventListener("change", function(){ BALL.nomax = $("botallnm").checked; botAllDraw(); });
+  $("botall").addEventListener("toggle", botAllDraw);
+})();
 $("botexp").addEventListener("click", function(){
   var t = botText(), ok = function(){ $("botmsg").textContent = "Kopirano (" + BST.length + " pozicij)."; };
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok, function(){ $("botmsg").textContent = "Kopiranje ni uspelo."; });
@@ -5340,7 +5446,7 @@ $("flcoin").addEventListener("click", async function(){
   var t = await coinFull();
   if (t) saveFile("zeton-" + String($("out").dataset.sym || "x").replace(/[^A-Za-z0-9]/g, ""), "txt", t, $("cpmsg"));
 });
-$("flother").addEventListener("click", async function(){ $("cpmsg").textContent = "Zbiram…"; saveFile("ostali-podatki", "txt", otherText() + await archText(), $("cpmsg")); });
+$("flother").addEventListener("click", async function(){ $("cpmsg").textContent = "Zbiram…"; saveFile("ostali-podatki", "txt", (await botAllTxtAll()) + otherText() + await archText(), $("cpmsg")); });
 $("botfile").addEventListener("click", function(){ saveFile("bot", "txt", botText(), $("botmsg")); });
 $("sigfile").addEventListener("click", function(){ saveFile("izvoz", "json", exportData(), $("sigfilemsg")); });
 $("sigfileimp").addEventListener("click", function(){ $("sigfilein").click(); });
@@ -5800,7 +5906,7 @@ async function allExport(){
   }
   try { var ba = await barAll(); if (ba.length) data.ct_bot_arch = ba; } catch (eBa) {}
   var txt = "";
-  try { txt = otherText(); } catch (e2) { txt = "ni bilo mogoče sestaviti: " + (e2 && e2.message); }
+  try { txt = (await botAllTxtAll()) + otherText(); } catch (e2) { txt = "ni bilo mogoče sestaviti: " + (e2 && e2.message); }
   try { data.ct_sig_arch = await archAll(); } catch (e3) { data.ct_sig_arch = []; }
   try { await longFlush(); data.ct_long = longExport(); } catch (e3b) {}
   try { txt += await archText(); } catch (e4) {}
