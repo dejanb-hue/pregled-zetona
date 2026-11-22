@@ -4441,7 +4441,7 @@ function botTrig(c, sp, src, only){
     st15: s15 ? s15.s : null, st1: s1 ? s1.s : null, why: why, noAC: (conf && trend) ? "" : ((!conf ? "brez potrditve" : "") + (!conf && !trend ? " in " : "") + (!trend ? "brez trenda" : "")),
     ev: eventsFor(c.label, c.addr).filter(function(e){ return Date.now() - e.t < 1800000; }).slice(-6).map(function(e){ return hhmm(e.t) + " " + (EVSHORT[e.st] || e.st); }),
     ak: (row && row.ak) ? row.ak : null,
-    row: row ? {liq: row.liq, v1: row.v1, b1: row.b1, s1: row.s1, m5: row.m5, h1: row.h1, ok: poolOk(row)} : null};
+    row: row ? {liq: row.liq, v1: row.v1, b1: row.b1, s1: row.s1, m5: row.m5, h1: row.h1, ok: poolOk(row), w3: ocRowW3(row)} : null};
   var vars = only ? [only] : conf && trend ? ["A", "B", "C"] : ["B"];
   if (!BCFG.watch) { vars.forEach(function(v){ botOpen(v, c, k.last, ctx, row, en); }); return; }
   var now = Date.now();
@@ -4541,13 +4541,15 @@ async function ocTick(){
     var list = Object.keys(m).map(function(k){ return m[k]; }).sort(function(x, y){ return y.pr - x.pr; }).slice(0, 30);
     OCI.n = list.length;
     await pool(list, 3, async function(x){
-      var s = await ocGet(x.addr, x.chain, 110000);
+      var s = await ocGet(x.addr, x.chain, 50000);
       if (s && s.t > now - 5000) svPutRows("k", ocKey(x.sym, x.addr), "d", [[s.t, s.v5, s.v1, s.v4, s.v24, s.b1, s.s1, s.liq, s.hold, s.c1]]);
-      await ocKlSave(x.sym, x.addr, x.chain);
     });
   } catch (e) {}
   ocBusy = false;
 }
+/* Web3 kot glavni vir spot prometa: svež posnetek (do 3 min) za naslov, sicer null */
+function ocFresh(addr){ var c = addr ? OC[String(addr).toLowerCase()] : null; return c && Date.now() - c.t < 180000 ? c : null; }
+function ocRowW3(r){ var c = r && ocFresh(r.addr); return c ? {t: c.t, v5: c.v5, v1: c.v1, v4: c.v4, v24: c.v24, b5: c.b5, s5: c.s5, b1: c.b1, s1: c.s1, liq: c.liq, hold: c.hold, c1: c.c1} : null; }
 function ocAttach(obj, addr, chain, save){
   if (!obj || !addr) return;
   ocGet(addr, chain, 180000).then(function(s){ if (!s) return; obj.w3 = JSON.parse(JSON.stringify(s)); if (save) save(); }).catch(function(){});
@@ -4562,17 +4564,13 @@ function ocLine(addr){
 }
 function ocMetric(){
   var now = Date.now(), ag = function(t){ return t ? "pred " + Math.round((now - t) / 1000) + " s" : "še ni"; };
-  var lvl = (!OCI.lastOk && OCI.err) ? "red" : (OCI.err > OCI.ok || OCI.klErr > OCI.klOk) ? "amber" : OCI.lastOk ? "green" : "amber";
-  return metric("Binance Web3 on-chain promet", ag(OCI.lastOk), "Polni spot promet (vsi DEX), kovancev v spremljanju " + OCI.n + ". Podatki: uspešnih " + OCI.ok + ", napak " + OCI.err + (OCI.lastErr ? " (zadnja: " + OCI.lastErr + ")" : "") + ". Svečke (dquery): uspešnih " + OCI.klOk + ", napak " + OCI.klErr + (OCI.klLastErr ? " (zadnja: " + OCI.klLastErr + ")" : "") + "." + (OCI.test ? " Preizkus: " + OCI.test : ""), lvl);
+  var lvl = (!OCI.lastOk && OCI.err) ? "red" : (OCI.err > OCI.ok) ? "amber" : OCI.lastOk ? "green" : "amber";
+  return metric("Binance Web3 on-chain promet", ag(OCI.lastOk), "Polni spot promet (vsi DEX), kovancev v spremljanju " + OCI.n + ". Podatki: uspešnih " + OCI.ok + ", napak " + OCI.err + (OCI.lastErr ? " (zadnja: " + OCI.lastErr + ")" : "") + ". Posnetek vsako minuto, glavni vir spot prometa, nakupov/prodaj in likvidnosti (on-chain svečke dquery so izklopljene, ker jih brskalnik ne dovoli)." + (OCI.test ? " Preizkus: " + OCI.test : ""), lvl);
 }
 async function ocTest(){
   var X = "0x0510101ec6c49d24ed911f0011e22a0d697ee776", out = [];
   OCI.test = "teče…"; renderHealth();
   try { delete OC[X]; var s = await ocGet(X, "bsc", 0); out.push(s && Date.now() - s.t < 15000 ? "podatki OK (X promet 24 h " + usd(s.v24) + ", likv. " + usd(s.liq) + ")" : "podatki NE (" + OCI.lastErr + ")"); } catch (e) { out.push("podatki NE (" + (e && e.message || e) + ")"); }
-  try {
-    var r = await fetch(OC_KL + "?address=" + X + "&platform=bsc&interval=1h&limit=2"), j = await r.json();
-    out.push(Array.isArray(j && j.data) && j.data.length ? "svečke OK (X zadnja ura " + usd(ocNum(j.data[j.data.length - 1][4])) + ")" : "svečke NE");
-  } catch (e) { out.push("svečke NE (" + (e && e.message || e) + ")"); }
   OCI.test = out.join(", ") + " ob " + new Date().toLocaleTimeString("sl-SI"); renderHealth();
 }
 setInterval(function(){ ocTick(); }, 60000);
@@ -4871,10 +4869,11 @@ function botOpen(v, c, px, ctx, row, en, reent){
   var now = Date.now(), mine = BST.filter(function(p){ return p.v === v; });
   if (mine.filter(function(p){ return p.st === "open"; }).length >= BCFG.maxOpen) return;
   if (mine.some(function(p){ return p.sym === c.sym && (p.st === "open" || (!reent && true) && now - (p.t1 || 0) < (v === "H" && BCFG.hCool != null ? BCFG.hCool : (p.why === "mirovanje" || p.why === "brez rasti") && BCFG.coolStag != null ? BCFG.coolStag : BCFG.cool) * 60000); })) return;
-  var slip = (row && row.liq > 0) ? BCFG.amt / (row.liq / 2) * 100 : 0.3, cost = BCFG.fee + slip, k0 = Math.floor(now / 60000) * 60000;
+  var w3c = ocFresh(c.addr), lq0 = (w3c && w3c.liq > 0) ? w3c.liq : (row && row.liq > 0 ? row.liq : 0);
+  var slip = lq0 > 0 ? BCFG.amt / (lq0 / 2) * 100 : 0.3, cost = BCFG.fee + slip, k0 = Math.floor(now / 60000) * 60000;
   var rule = v === "A" ? "A: taker + potrditev + trend, trail stop (začetni stop −" + fr(botS0("A", BCFG)) + " %, trail od +" + fr(BCFG.tStart) + " %)" : v === "B" ? "B: samo taker, trail stop (kontrola)" : v === "E" ? "E: EMA sprožilec + potrditev (volumen, taker, OI), izstop kot C: pri +" + fr(BCFG.cAt) + " % proda " + fr(BCFG.cPart) + " %, nato trail " + fr(BCFG.cTr) + " % pod vrhom (širi se z rastjo)" : v === "D" ? "D: trend sprožilec (enakomerna rast), izstop kot C: pri +" + fr(BCFG.cAt) + " % proda " + fr(BCFG.cPart) + " %, preostanek trail " + fr(BCFG.cTr) + " % pod vrhom" : "C: kot A, a pri +" + fr(BCFG.cAt) + " % proda " + fr(BCFG.cPart) + " %, stop na vstop, preostanek trail " + fr(BCFG.cTr) + " % pod vrhom";
   if (BCFG.sOn) rule = v + ": " + ({A: "taker + potrditev + trend", B: "samo taker (kontrola)", C: "taker + potrditev + trend", D: "trend sprožilec", E: "EMA sprožilec + potrditev", F: "spot-only Alpha opozorilo (opazovanje, virtualno)", G: "kratek sprožilec: skok cene 3 min + promet, brez opazovanja", H: "aktivno spremljanje trenda (impulz ali EMA trend), trail pas po volatilnosti, hiter ponovni vstop"}[v] || "") + "; izstop: začetni stop −" + fr(botS0(v, BCFG)) + " %, pri +" + fr(BCFG.be1At) + " % stop na vstop, pri +" + fr(BCFG.cAt) + " % proda " + fr(BCFG.cPart) + " %, pri +" + fr(BCFG.sl2At) + " % proda " + fr(BCFG.sl2Pct) + " %, nato trail po stopnicah +" + fr(BCFG.stepP) + " % s pasom " + [BCFG.s0Tr, BCFG.s1Tr, BCFG.s2Tr, BCFG.s3Tr, BCFG.s4Tr, BCFG.s5Tr].map(fr).join("/") + " %";
-  var e2 = Object.assign({}, en || {}, {rule: rule, slip: slip, liqSrc: row ? "Alpha seznam" : "ni podatka (privzeto 0,3 %)"});
+  var e2 = Object.assign({}, en || {}, {rule: rule, slip: slip, liqSrc: (w3c && w3c.liq > 0) ? "Binance Web3" : row ? "Alpha seznam" : "ni podatka (privzeto 0,3 %)"});
   var np = {id: v + "_" + c.sym + "_" + now, v: v, sym: c.sym, label: c.label, t: now, e: px, ein: px * (1 + cost / 100), cost: cost, peak: px, stop: px * (1 - botS0(v, BCFG) / 100), s0: botS0(v, BCFG), pd: false, pf: 0, pp: 0, k0: k0, kt: k0, st: "open", cfg: Object.assign({}, BCFG), ctx: ctx, last: px, en: e2, log: [], qv: [], addr: c.addr};
   BST.push(np); botSave(); botRender();
   try { ocAttach(np.en, np.addr, row && row.chain, function(){ botSave(); }); } catch (eW) {}
@@ -5203,7 +5202,7 @@ function botFAdd(kind, r, text){
   if (BW.some(function(w){ return w.alpha && w.sym === r.sym && w.st === "watch"; })) return;
   var now = Date.now(), k0 = Math.floor(now / 60000) * 60000;
   var ctx = "Alpha opozorilo (" + kind + "): " + text + " · brez futures";
-  var w = {id: "W_" + r.sym + "_" + now, alpha: 1, aid: r.alphaId, sym: r.sym, label: r.sym, addr: r.addr, t: now, px0: r.price, k0: k0, kt: k0 - 60000, lo: r.price, hi: r.price, n: 0, cs: [], vars: ["F"], ctx: ctx, en: {why: ctx, row: {liq: r.liq, v1: r.v1, m5: r.m5, h1: r.h1}, p1: r.h1, kind: kind}, row: {liq: r.liq}, cfg: Object.assign({}, BCFG), st: "watch"};
+  var w = {id: "W_" + r.sym + "_" + now, alpha: 1, aid: r.alphaId, sym: r.sym, label: r.sym, addr: r.addr, t: now, px0: r.price, k0: k0, kt: k0 - 60000, lo: r.price, hi: r.price, n: 0, cs: [], vars: ["F"], ctx: ctx, en: {why: ctx, row: {liq: r.liq, v1: r.v1, m5: r.m5, h1: r.h1, w3: ocRowW3(r)}, p1: r.h1, kind: kind}, row: {liq: r.liq}, cfg: Object.assign({}, BCFG), st: "watch"};
   BW.push(w); botWSave(); botRender();
 }
 /* ---------- varianta G: kratek sprožilec (skok cene + promet v 3 min), brez opazovanja ---------- */
