@@ -269,7 +269,7 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <p class="note">Kontrolni seznam: ali so viri in kovanci popolni. Težave se beležijo, stran jih skuša sama rešiti (ponovni poskus, drug vir).</p>
   <div class="card" id="hlcheck"></div>
   <div class="card" id="hllog" style="overflow-x:auto;margin-top:8px"></div>
-  <div class="row" style="margin-top:8px"><button class="ghost small" id="hlclear">Počisti dnevnik težav</button></div>
+  <div class="row" style="margin-top:8px"><button class="ghost small" id="hlclear">Počisti dnevnik težav</button> <button class="ghost small" id="octest">Preizkus on-chain vira (X)</button></div>
   <div class="row" style="margin-top:8px"><button class="ghost small" id="lgexp">Izvozi dnevnik</button></div>
   <p class="stat">Kov. = kovanci z rastjo volumna nad pragom iz nastavitev. Signali so brez dvojnikov 15 min/1 h. Skeni: število osveževanj v uri (rumeno = luknja, zap. = zapolnjeno iz Binance svečk).</p>
   </div><div data-tab="chk">
@@ -2431,6 +2431,7 @@ function renderHealth(){
   h += metric("Alpha seznam in DEXScreener", ageA == null ? "še ni" : "pred " + ageA + " s",
     "Paketov " + H.dexJobs + ", neuspelih " + H.dexFail + ". Sken traja " + (H.alphaMs / 1000).toFixed(1).replace(".", ",") + " s. Brez DEX podatkov (promet 24 h nad pragom): " + (H.noData.length ? H.noData.join(", ") : "nobenega") + "." + (by("alphasrc").length ? " Napaka: " + by("alphasrc")[0].msg : ""),
     (H.dexFail || by("alphasrc").length) ? "red" : (H.noData.length || (ageA != null && ageA > 120)) ? "amber" : "green");
+  try { h += ocMetric(); } catch (eOc) {}
   h += metric("Alpha kovanci z luknjami", String(al.length), al.length ? al.slice(0, 10).map(function(o){ return o.sym + ": " + o.k; }).join(", ") + ". Stran jih sama ponovno poskuša (največ 2 krat, nato ostane v dnevniku)." + qt : "Vsi kovanci nad pragom imajo ceno in spremembe." + qt, al.length ? "amber" : "green");
   h += metric("Futures sken", ageF == null ? "še ni" : "pred " + ageF + " s",
     "Pregledanih " + H.futN + ", z luknjami " + fu.length + (fu.length ? " (" + fu.slice(0, 8).map(function(o){ return o.sym; }).join(", ") + ")" : "") + (by("futsrc").length ? ". Napaka: " + by("futsrc")[0].msg : "") + (fBackoff > now ? ". Binance je omejil, počitek še " + Math.round((fBackoff - now) / 1000) + " s" : "") + ".",
@@ -2541,6 +2542,7 @@ function logAlert(kind, per, c, p0, text, spotRow, extra){
   if (spotRow) { e.src = "gt"; e.chain = spotRow.chain; e.pool = spotRow.pool; }
   if (extra) Object.keys(extra).forEach(function(k){ e[k] = extra[k]; });
   sigs.push(e); saveSigs(sigs); evtCapture(e);
+  if (c.addr) { try { ocGet(c.addr, spotRow && spotRow.chain, 180000).then(function(s){ if (!s) return; var a2 = loadSigs(), x = a2.filter(function(y){ return y.id === e.id; })[0]; if (x) { x.w3 = JSON.parse(JSON.stringify(s)); saveSigs(a2); } }).catch(function(){}); } catch (eW) {} }
   if (spotRow && (kind === "a_px" || kind === "a_px30" || kind === "a_jump")) { try { botFAdd(kind, spotRow, text); } catch (er) {} }
   renderSigs();
 }
@@ -4407,6 +4409,7 @@ function coinScanStatus(){
     var qv = tickCache[e.symbol] && tickCache[e.symbol].qv, x = F && F.byAddr[a], sc = lastFutOk.filter(function(c){ return c.sym === e.symbol; })[0];
     s += "Futures: par " + e.symbol + " · promet 24 h " + usd(qv) + " · " + (x ? (x.ok ? "v kandidatih, pregledan (OI in svečke)" : "v kandidatih, brez OI ali svečk") : "ni med kandidati zadnjega skena (" + (futE(r, futInfo, tickCache) ? "izven top 60" : "izven spot filtra in futures promet pod $50M") + ")") + (sc ? "" : " · ni v lastFutOk") + "\n";
   }
+  try { s += ocLine(lastAddr); } catch (eOc) {}
   return s;
 }
 var lastGapAt = 0;
@@ -4530,6 +4533,131 @@ function botTrig(c, sp, src, only){
   getEmaAt(c.sym, now).then(function(e){ if (e) { w.en.ema = e; botWSave(); } }).catch(function(){});
   if (row) alphaTkGet(row, true).then(function(a){ if (a) { w.en.ak = a; botWSave(); } }).catch(function(){});
 }
+/* ---------- Binance Web3 on-chain promet (polni spot promet vseh DEX; dynamic/info in dquery svečke) ---------- */
+var OC_DYN = "https://web3.binance.com/bapi/defi/v4/public/wallet-direct/buw/wallet/market/token/dynamic/info";
+var OC_KL = "https://dquery.sintral.io/u-kline/v1/k-line/candles";
+var OC_CHAIN = {bsc: "56", ethereum: "1", base: "8453", solana: "CT_501"}, OC_PLAT = {bsc: "bsc", ethereum: "eth", base: "base", solana: "solana"};
+var OC = {}, OCK = {}, OCI = {ok: 0, err: 0, lastOk: 0, lastErr: "", klOk: 0, klErr: 0, klLastOk: 0, klLastErr: "", back: 0, n: 0, test: ""}, ocBusy = false;
+function ocNum(x){ var v = parseFloat(x); return isFinite(v) ? v : null; }
+function ocChainOf(addr, chain){
+  if (chain && OC_CHAIN[chain]) return chain;
+  var a = String(addr || "").toLowerCase();
+  var r = (typeof gRows !== "undefined" ? gRows : []).filter(function(x){ return String(x.addr).toLowerCase() === a; })[0];
+  if (r && OC_CHAIN[r.chain]) return r.chain;
+  return a ? (/^0x/.test(a) ? null : "solana") : null;
+}
+function ocKey(sym, a){ return (sym || "?") + "@" + String(a || "").toLowerCase().slice(0, 10); }
+function ocSnap(d){
+  return {t: Date.now(), px: ocNum(d.price), v5: ocNum(d.volume5m), v1: ocNum(d.volume1h), v4: ocNum(d.volume4h), v24: ocNum(d.volume24h),
+    b5: ocNum(d.volume5mBuy), s5: ocNum(d.volume5mSell), b1: ocNum(d.volume1hBuy), s1: ocNum(d.volume1hSell), b24: ocNum(d.volume24hBuy), s24: ocNum(d.volume24hSell),
+    bn1: ocNum(d.volume1hBinance), bn24: ocNum(d.volume24hBinance), c5: ocNum(d.count5m), c1: ocNum(d.count1h), c24: ocNum(d.count24h),
+    liq: ocNum(d.liquidity), hold: ocNum(d.holders), mc: ocNum(d.marketCap), top10: ocNum(d.top10HoldersPercentage), smh: ocNum(d.smartMoneyHolders),
+    p5: ocNum(d.percentChange5m), p1: ocNum(d.percentChange1h)};
+}
+async function ocGet(addr, chain, maxAge){
+  var a = String(addr || "").toLowerCase(), ch = ocChainOf(addr, chain);
+  if (!a || !ch) return null;
+  var c = OC[a];
+  if (c && Date.now() - c.t < (maxAge == null ? 120000 : maxAge)) return c;
+  if (Date.now() < OCI.back) return c || null;
+  try {
+    var r = await fetch(OC_DYN + "?chainId=" + OC_CHAIN[ch] + "&contractAddress=" + encodeURIComponent(addr));
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    var j = await r.json();
+    if (!j || j.code !== "000000" || !j.data) {
+      if (j && j.code === "100004") OCI.back = Date.now() + 300000;
+      throw new Error("koda " + (j && j.code) + (j && j.message ? " " + j.message : ""));
+    }
+    var s = ocSnap(j.data); s.ch = ch; OC[a] = s; OCI.ok++; OCI.lastOk = Date.now();
+    return s;
+  } catch (e) {
+    OCI.err++; OCI.lastErr = String(e && e.message || e) + " ob " + new Date().toLocaleTimeString("sl-SI");
+    return c || null;
+  }
+}
+/* on-chain 1-min svečke: vrstica [t, o, h, l, c, promet USD, null, transakcij], vir "o" */
+async function ocKlSave(sym, addr, chain){
+  var a = String(addr || "").toLowerCase(), ch = ocChainOf(addr, chain);
+  if (!a || !ch || !OC_PLAT[ch]) return;
+  var st = OCK[a] || (OCK[a] = {t: 0, last: 0}), now = Date.now();
+  if (now - st.t < 300000 || now < OCI.back) return;
+  st.t = now;
+  try {
+    var lim = st.last ? Math.min(500, Math.ceil((now - st.last) / 60000) + 2) : 120;
+    var r = await fetch(OC_KL + "?address=" + encodeURIComponent(addr) + "&platform=" + OC_PLAT[ch] + "&interval=1min&limit=" + lim);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    var j = await r.json(), d = j && j.data;
+    if (!Array.isArray(d)) throw new Error("ni podatkov" + (j && j.status && j.status.error_message ? ": " + j.status.error_message : ""));
+    var rows = [];
+    d.forEach(function(x){
+      if (!Array.isArray(x)) return;
+      var t = Number(x[5]);
+      if (!isFinite(t) || t + 60000 > Date.now()) return;
+      rows.push([t, ocNum(x[0]), ocNum(x[1]), ocNum(x[2]), ocNum(x[3]), r2(ocNum(x[4]) || 0, 1), null, ocNum(x[6])]);
+    });
+    svPutRows("k", ocKey(sym, a), "o", rows);
+    if (rows.length) st.last = rows[rows.length - 1][0];
+    OCI.klOk++; OCI.klLastOk = Date.now();
+  } catch (e) {
+    OCI.klErr++; OCI.klLastErr = String(e && e.message || e) + " ob " + new Date().toLocaleTimeString("sl-SI");
+  }
+}
+/* vsako minuto: odprte pozicije, opazovanja, spot kandidati, hitri premiki, top 15 po prometu, odprt kovanec; največ 30 */
+async function ocTick(){
+  if (ocBusy || document.visibilityState !== "visible") return;
+  ocBusy = true;
+  try {
+    var now = Date.now(), m = {};
+    var add = function(sym, addr, chain, pr){ if (!addr) return; var a = String(addr).toLowerCase(); if (!m[a] || m[a].pr < pr) m[a] = {sym: sym, addr: addr, chain: chain, pr: pr}; };
+    BST.forEach(function(p){ if (p.st === "open" && p.addr) add(p.label || p.sym, p.addr, null, 5); });
+    BW.forEach(function(w){ if (w.st === "watch" && w.addr) add(w.label || w.sym, w.addr, null, 4); });
+    var spq = {}; try { spq = JSON.parse(localStorage.getItem("ct_spq") || "{}") || {}; } catch (e0) {}
+    (gRows || []).forEach(function(r){
+      var pr = (spq[r.sym] && now - spq[r.sym] < 86400000) || r.jump ? 3 : (Math.abs(r.m5 || 0) >= (settings.thr || 5) || (r.h1 || 0) >= 10) ? 2 : 0;
+      if (pr) add(r.sym, r.addr, r.chain, pr);
+    });
+    (gRows || []).slice().sort(function(x, y){ return (y.v1 || 0) - (x.v1 || 0); }).slice(0, 15).forEach(function(r){ add(r.sym, r.addr, r.chain, 1); });
+    if (lastAddr) add(($("out") && $("out").dataset.sym) || "", lastAddr, null, 6);
+    var list = Object.keys(m).map(function(k){ return m[k]; }).sort(function(x, y){ return y.pr - x.pr; }).slice(0, 30);
+    OCI.n = list.length;
+    await pool(list, 3, async function(x){
+      var s = await ocGet(x.addr, x.chain, 110000);
+      if (s && s.t > now - 5000) svPutRows("k", ocKey(x.sym, x.addr), "d", [[s.t, s.v5, s.v1, s.v4, s.v24, s.b1, s.s1, s.liq, s.hold, s.c1]]);
+      await ocKlSave(x.sym, x.addr, x.chain);
+    });
+  } catch (e) {}
+  ocBusy = false;
+}
+function ocAttach(obj, addr, chain, save){
+  if (!obj || !addr) return;
+  ocGet(addr, chain, 180000).then(function(s){ if (!s) return; obj.w3 = JSON.parse(JSON.stringify(s)); if (save) save(); }).catch(function(){});
+}
+function ocLine(addr){
+  if (!addr) return "";
+  var a = String(addr).toLowerCase(), c = OC[a];
+  if (!c || Date.now() - c.t > 120000) { try { ocGet(addr, null, 110000); } catch (e) {} }
+  if (!c) return "On-chain (Binance Web3): " + (OCI.lastErr && !OCI.lastOk ? "vir ni dosegljiv (" + OCI.lastErr + ")" : "nalagam, osveži čez nekaj sekund") + "\n";
+  var bs = function(b, s){ return (b != null && s != null) ? " (nak. " + usd(b) + " / prod. " + usd(s) + ")" : ""; };
+  return "On-chain promet (Binance Web3, vsi DEX, pred " + Math.round((Date.now() - c.t) / 1000) + " s): 5 min " + usd(c.v5) + bs(c.b5, c.s5) + " · 1 h " + usd(c.v1) + bs(c.b1, c.s1) + " · 4 h " + usd(c.v4) + " · 24 h " + usd(c.v24) + bs(c.b24, c.s24) + " · od tega prek Binance 24 h " + usd(c.bn24) + " · transakcij 1 h " + (c.c1 != null ? c.c1 : "–") + " · likv. " + usd(c.liq) + " · imetniki " + (c.hold != null ? c.hold : "–") + (c.top10 != null ? " · top 10 imetnikov " + fr(c.top10) + " %" : "") + "\n";
+}
+function ocMetric(){
+  var now = Date.now(), ag = function(t){ return t ? "pred " + Math.round((now - t) / 1000) + " s" : "še ni"; };
+  var lvl = (!OCI.lastOk && OCI.err) ? "red" : (OCI.err > OCI.ok || OCI.klErr > OCI.klOk) ? "amber" : OCI.lastOk ? "green" : "amber";
+  return metric("Binance Web3 on-chain promet", ag(OCI.lastOk), "Polni spot promet (vsi DEX), kovancev v spremljanju " + OCI.n + ". Podatki: uspešnih " + OCI.ok + ", napak " + OCI.err + (OCI.lastErr ? " (zadnja: " + OCI.lastErr + ")" : "") + ". Svečke (dquery): uspešnih " + OCI.klOk + ", napak " + OCI.klErr + (OCI.klLastErr ? " (zadnja: " + OCI.klLastErr + ")" : "") + "." + (OCI.test ? " Preizkus: " + OCI.test : ""), lvl);
+}
+async function ocTest(){
+  var X = "0x0510101ec6c49d24ed911f0011e22a0d697ee776", out = [];
+  OCI.test = "teče…"; renderHealth();
+  try { delete OC[X]; var s = await ocGet(X, "bsc", 0); out.push(s && Date.now() - s.t < 15000 ? "podatki OK (X promet 24 h " + usd(s.v24) + ", likv. " + usd(s.liq) + ")" : "podatki NE (" + OCI.lastErr + ")"); } catch (e) { out.push("podatki NE (" + (e && e.message || e) + ")"); }
+  try {
+    var r = await fetch(OC_KL + "?address=" + X + "&platform=bsc&interval=1h&limit=2"), j = await r.json();
+    out.push(Array.isArray(j && j.data) && j.data.length ? "svečke OK (X zadnja ura " + usd(ocNum(j.data[j.data.length - 1][4])) + ")" : "svečke NE");
+  } catch (e) { out.push("svečke NE (" + (e && e.message || e) + ")"); }
+  OCI.test = out.join(", ") + " ob " + new Date().toLocaleTimeString("sl-SI"); renderHealth();
+}
+setInterval(function(){ ocTick(); }, 60000);
+setTimeout(function(){ ocTick(); }, 8000);
+setInterval(function(){ if (OCI.n) renderHealth(); }, 60000);
 /* ---------- shranjevanje za analizo (IndexedDB ct_svecke): 1-min svečke, L/S skupni in top, arhiv opazovanj, sledenje po izstopu ---------- */
 var SV_DAYS = 7, SVW_DAYS = 30, TRK_H = 6, TRK_EVERY = 5, LS_EVERY = 15;
 var SVB = {k: {}, ls: {}}, SVW = {}, SVI = {n: 0, ls: 0, w: 0, err: "", flushT: 0, pruneT: 0}, svDbP = null, SVA = {}, LST = {};
@@ -4648,7 +4776,7 @@ async function svExport(){
   var db = await svDb();
   var get = function(s){ return new Promise(function(res){ var q = db.transaction(s).objectStore(s).getAll(); q.onsuccess = function(){ res(q.result || []); }; q.onerror = function(){ res([]); }; }); };
   var k = await get("k"), ls = await get("ls"), w = await get("w");
-  return {kcols: "kovanec, vir (f = futures, a = Alpha), ura, vrstice [t, o, h, l, c, promet quote, taker nakup quote]", lscols: "kovanec, blok 6 h, vrstice [t, L/S skupni računi, top pozicije, top računi]",
+  return {kcols: "kovanec, vir, ura, vrstice. Vir f = futures in a = Alpha (samo promet prek Binance Alpha): [t, o, h, l, c, promet quote, taker nakup quote]; vir o = on-chain svečke vseh DEX (dquery, kovanec@naslov): [t, o, h, l, c, promet USD, null, transakcij]; vir d = on-chain posnetki (Binance Web3): [t, promet 5 min, 1 h, 4 h, 24 h, nakupi 1 h, prodaje 1 h, likvidnost, imetniki, transakcij 1 h]", lscols: "kovanec, blok 6 h, vrstice [t, L/S skupni računi, top pozicije, top računi]",
     k: k.map(function(x){ return [x.s, x.src, x.h, x.r]; }), ls: ls.map(function(x){ return [x.s, x.h, x.r]; }), w: w};
 }
 function svImport(o){
@@ -4828,7 +4956,9 @@ function botOpen(v, c, px, ctx, row, en, reent){
   if (BCFG.sOn) rule = v + ": " + ({A: "taker + potrditev + trend", B: "samo taker (kontrola)", C: "taker + potrditev + trend", D: "trend sprožilec", E: "EMA sprožilec + potrditev", F: "spot-only Alpha opozorilo (opazovanje, virtualno)", G: "kratek sprožilec: skok cene 3 min + promet, brez opazovanja", H: "aktivno spremljanje trenda (impulz ali EMA trend), trail pas po volatilnosti, hiter ponovni vstop"}[v] || "") + "; izstop: začetni stop −" + fr(botS0(v, BCFG)) + " %, pri +" + fr(BCFG.be1At) + " % stop na vstop, pri +" + fr(BCFG.cAt) + " % proda " + fr(BCFG.cPart) + " %, pri +" + fr(BCFG.sl2At) + " % proda " + fr(BCFG.sl2Pct) + " %, nato trail po stopnicah +" + fr(BCFG.stepP) + " % s pasom " + [BCFG.s0Tr, BCFG.s1Tr, BCFG.s2Tr, BCFG.s3Tr, BCFG.s4Tr, BCFG.s5Tr].map(fr).join("/") + " %";
   var e2 = Object.assign({}, en || {}, {rule: rule, slip: slip, liqSrc: row ? "Alpha seznam" : "ni podatka (privzeto 0,3 %)"});
   var np = {id: v + "_" + c.sym + "_" + now, v: v, sym: c.sym, label: c.label, t: now, e: px, ein: px * (1 + cost / 100), cost: cost, peak: px, stop: px * (1 - botS0(v, BCFG) / 100), s0: botS0(v, BCFG), pd: false, pf: 0, pp: 0, k0: k0, kt: k0, st: "open", cfg: Object.assign({}, BCFG), ctx: ctx, last: px, en: e2, log: [], qv: [], addr: c.addr};
-  BST.push(np); botSave(); botRender(); return np;
+  BST.push(np); botSave(); botRender();
+  try { ocAttach(np.en, np.addr, row && row.chain, function(){ botSave(); }); } catch (eW) {}
+  return np;
 }
 function botClose(p, px, why, t, k){
   var q = 1 - p.cost / 100, r = function(x){ return x * q / p.ein - 1; };
@@ -5610,6 +5740,7 @@ try { if (!localStorage.getItem("ct_mig2")) { localStorage.removeItem(LOG_KEY); 
 lsFlush(); lsReset();
 renderTrendTop(); renderSpotTrend(); $("auto").checked = settings.auto; $("autofill").checked = settings.autoFill; renderLog(); renderLeaders(); renderHealth();
 $("hlclear").addEventListener("click", function(){ hLog = []; hSave(); renderHealth(); });
+$("octest").addEventListener("click", function(){ ocTest(); });
 scanAlpha().then(scanFut).then(function(){ if (settings.autoFill) fillGaps(); });
 setInterval(function(){ if (document.visibilityState === "visible") resolveSigs().then(function(){ renderSigs(); }, function(){}); }, 45000);
 if (settings.auto) setAuto(true);
