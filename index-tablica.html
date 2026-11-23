@@ -1667,7 +1667,7 @@ async function scanAlpha(){
   setStatus("Nalagam…");
   try {
     var toks = await getAlphaTokens();
-    var groups = {}; var t00 = Date.now(); H.dexFail = 0; H.noData = [];
+    var groups = {}; var t00 = Date.now(); H.dexFail = 0; H.noData = []; H.w3only = [];
     toks.forEach(function(t){
       var c = DX_CHAIN[String(t.chainId)];
       (groups[c] = groups[c] || []).push(t);
@@ -1721,6 +1721,8 @@ async function scanAlpha(){
       var key = String(t.contractAddress).toLowerCase();
       var b = best[key], o = old[key];
       if (!b) {
+        var w3r = ocW3Row(t, o);
+        if (w3r) { rows.push(w3r); H.w3only = (H.w3only || []).concat(t.symbol); return; }
         if (pf(t.volume24h) >= settings.min24) H.noData.push(t.symbol);
         if (o && (o.stale || 0) < 10 && o.price > 0) { o.stale = (o.stale || 0) + 1; o.jumpNew = false; rows.push(o); }
         return;
@@ -4673,12 +4675,24 @@ async function ocTick(){
     });
     (gRows || []).slice().sort(function(x, y){ return (y.v1 || 0) - (x.v1 || 0); }).slice(0, 15).forEach(function(r){ add(r.sym, r.addr, r.chain, 1); });
     Object.keys(OCQ).forEach(function(a){ var q = OCQ[a]; add(q.sym, q.addr, q.chain, 2); });
+    var tk = ocAlphaRank();
+    tk.slice(0, OC_TOP).forEach(function(t){ add(t.symbol, t.contractAddress, DX_CHAIN[String(t.chainId)], 2); });
+    Object.keys(OCH).forEach(function(a){ var q = OCH[a]; if (now - q.t > 1800000) { delete OCH[a]; return; } add(q.sym, q.addr, q.chain, 2); });
     if (lastAddr) add(($("out") && $("out").dataset.sym) || "", lastAddr, null, 6);
-    var list = Object.keys(m).map(function(k){ return m[k]; }).sort(function(x, y){ return y.pr - x.pr; }).slice(0, 40);
+    var list = Object.keys(m).map(function(k){ return m[k]; }).sort(function(x, y){ return y.pr - x.pr; }).slice(0, OC_MAIN);
+    var inL = {}; list.forEach(function(x){ inL[String(x.addr).toLowerCase()] = 1; });
+    var rot = tk.slice(OC_TOP).filter(function(t){ return !inL[String(t.contractAddress).toLowerCase()] && ocChainOf(t.contractAddress, DX_CHAIN[String(t.chainId)]) && (pf(t.liquidity) || 0) >= (settings.minLiq || 0); });
+    OCR.n = rot.length;
+    if (rot.length) {
+      var st0 = OCR.i % rot.length, nr = Math.min(OC_ROT, rot.length);
+      for (var ri = 0; ri < nr; ri++) { var tr = rot[(st0 + ri) % rot.length]; list.push({sym: tr.symbol, addr: tr.contractAddress, chain: DX_CHAIN[String(tr.chainId)], pr: 0, rot: 1}); }
+      OCR.i = st0 + nr; if (OCR.i >= rot.length) { OCR.i = 0; OCR.cyc++; OCR.cycAt = now; }
+    }
     OCI.n = list.length;
-    await pool(list, 3, async function(x){
+    await pool(list, 4, async function(x){
       var s = await ocGet(x.addr, x.chain, 50000);
       if (s) delete OCQ[String(x.addr).toLowerCase()];
+      if (s && x.rot && ((s.v1 || 0) >= OC_HOT1 || (s.v5 || 0) >= OC_HOT5)) { OCH[String(x.addr).toLowerCase()] = {sym: x.sym, addr: x.addr, chain: x.chain, t: now}; OCR.hot++; }
       if (s && s.t > now - 5000) svPutRows("k", ocKey(x.sym, x.addr), "d", [[s.t, s.v5, s.v1, s.v4, s.v24, s.b1, s.s1, s.liq, s.hold, s.c1]]);
     });
   } catch (e) {}
@@ -4691,6 +4705,19 @@ function ocRowW3(r){ var c = r && ocFresh(r.addr); return c ? {t: c.t, v5: c.v5,
 function v1Eff(r){ if (!r) return 0; var c = ocFresh(r.addr); return (c && c.v1 != null) ? Math.max(c.v1, r.v1 || 0) : (r.v1 || 0); }
 function volEff(r){ if (!r) return 0; var c = ocFresh(r.addr); return (c && c.v24 != null) ? Math.max(c.v24, r.vol || 0) : (r.vol || 0); }
 var OCQ = {};
+/* Web3 izbor (23. 11.): top 40 po Binance Alpha 24 h prometu vsako minuto, ostali (likv. >= minLiq) krožno po 20 na minuto;
+   krožni kovanec z Web3 prometom 1 h >= 250K ali 5 min >= 40K postane "vroč" in je 30 min na vsako minuto */
+var OC_TOP = 40, OC_MAIN = 60, OC_ROT = 20, OC_HOT1 = 250000, OC_HOT5 = 40000, OCH = {}, OCR = {i: 0, n: 0, cyc: 0, cycAt: 0, hot: 0};
+function ocAlphaRank(){ return (alphaTokens || []).slice().sort(function(x, y){ return (pf(y.volume24h) || 0) - (pf(x.volume24h) || 0); }); }
+/* vrstica za kovanec, ki ga DEXScreener ne vrne: iz Web3 posnetka (do 10 min) */
+function ocW3Row(t, o){
+  var a = String(t.contractAddress || "").toLowerCase(), c = OC[a], ch = DX_CHAIN[String(t.chainId)];
+  if (!c || Date.now() - c.t > 600000 || !(c.px > 0) || !ch) return null;
+  var v1 = c.v1 || 0, jv = jumpCalc(o, v1), b24 = pf(t.percentChange24h);
+  return {sym: t.symbol, addr: t.contractAddress, chain: ch, alphaId: t.alphaId, m5: c.p5, h1: c.p1, h6: o ? o.h6 : null, h24: b24,
+    dexLiq: 0, miss: false, w3only: true, liq: Math.max(c.liq || 0, pf(t.liquidity) || 0), vol: Math.max(c.v24 || 0, pf(t.volume24h) || 0), price: c.px, v1: v1, stale: 0,
+    b1: 0, s1: 0, b5: 0, s5: 0, pool: null, c15: o ? o.c15 : null, c15At: o ? o.c15At : 0, vh: jv.vh, jumpAt: jv.at, jump: jv.on, jumpNew: jv.nw, jbase: jv.base};
+}
 /* kovanci pod pragom 1 h po DEXScreenerju: pred zavrnitvijo preveri Web3 (naslednji sken ga že upošteva) */
 function ocQueue(rows){
   var now = Date.now();
@@ -4749,7 +4776,7 @@ function ocLine(addr){
 function ocMetric(){
   var now = Date.now(), ag = function(t){ return t ? "pred " + Math.round((now - t) / 1000) + " s" : "še ni"; };
   var lvl = (!OCI.lastOk && OCI.err) ? "red" : (OCI.err > OCI.ok) ? "amber" : OCI.lastOk ? "green" : "amber";
-  return metric("Binance Web3 on-chain promet", ag(OCI.lastOk), "Polni spot promet (vsi DEX), kovancev v spremljanju " + OCI.n + ". Podatki: uspešnih " + OCI.ok + ", napak " + OCI.err + (OCI.lastErr ? " (zadnja: " + OCI.lastErr + ")" : "") + ". Posnetek vsako minuto, glavni vir spot prometa, nakupov/prodaj in likvidnosti (on-chain svečke dquery so izklopljene, ker jih brskalnik ne dovoli)." + (OCI.test ? " Preizkus: " + OCI.test : ""), lvl);
+  return metric("Binance Web3 on-chain promet", ag(OCI.lastOk), "Polni spot promet (vsi DEX), kovancev v spremljanju " + OCI.n + ". Podatki: uspešnih " + OCI.ok + ", napak " + OCI.err + (OCI.lastErr ? " (zadnja: " + OCI.lastErr + ")" : "") + ". Posnetek vsako minuto, glavni vir spot prometa, nakupov/prodaj in likvidnosti (on-chain svečke dquery so izklopljene, ker jih brskalnik ne dovoli). Izbor: top " + OC_TOP + " po Binance Alpha 24 h prometu vsako minuto (" + ocAlphaRank().slice(0, OC_TOP).map(function(t){ return t.symbol; }).join(", ") + "); krožno še " + OCR.n + " kovancev po " + OC_ROT + " na minuto, krogov " + OCR.cyc + (OCR.cycAt ? " (zadnji " + ag(OCR.cycAt) + ")" : "") + "; vročih zdaj " + Object.keys(OCH).length + " (" + Object.keys(OCH).map(function(a){ return OCH[a].sym; }).join(", ") + "). Brez DEXScreenerja, samo iz Web3: " + ((H.w3only && H.w3only.length) ? H.w3only.join(", ") : "nobenega") + "." + (OCI.test ? " Preizkus: " + OCI.test : ""), lvl);
 }
 async function ocTest(){
   var X = "0x0510101ec6c49d24ed911f0011e22a0d697ee776", out = [];
