@@ -324,6 +324,9 @@ body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <details class="card" id="botall" style="margin-top:8px;padding:8px 10px"><summary id="botallsum" style="cursor:pointer;font-weight:600">Skupni seštevek</summary>
     <div class="row" style="margin:8px 0;gap:10px;align-items:center;flex-wrap:wrap"><select id="botallper"></select><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="botallnm"><span>brez največje pozicije</span></label></div>
     <div id="botallout" style="overflow-x:auto"></div></details>
+  <details class="card" id="botcoin" style="margin-top:8px;padding:8px 10px"><summary id="botcoinsum" style="cursor:pointer;font-weight:600">Po kovancih (z arhivom)</summary>
+    <div class="row" style="margin:8px 0;gap:8px;align-items:center;flex-wrap:wrap"><select id="bcper"></select><select id="bcvar"><option value="">Vse različice</option><option>A</option><option>B</option><option>C</option><option>D</option><option>E</option><option>F</option><option>G</option><option>H</option></select><select id="bcsort"><option value="eur">Razvrsti: neto €</option><option value="eurU">neto € (najslabši)</option><option value="n">število pozicij</option><option value="avg">povpr. %</option><option value="last">zadnji vstop</option><option value="name">ime</option></select><input id="bcq" type="search" placeholder="Išči kovanec" style="max-width:140px"></div>
+    <div id="botcoinout" style="overflow-x:auto"></div></details>
   <h2>Povzetek po različicah</h2><div class="card" id="botsum" style="overflow-x:auto"></div>
   <h2>Opazovanje po signalu</h2><div class="card" id="botwatch" style="overflow-x:auto"></div>
   <h2>Ponovni vstop (čakalnica)</h2><div class="card" id="botre" style="overflow-x:auto"></div>
@@ -5559,11 +5562,80 @@ async function botAllTxtAll(){
   try { var l = await barAll(); ARCL = Array.isArray(l) ? l : []; ARCN = BARN; } catch (e) {}
   try { return botAllTxtNow(); } catch (e2) { return "--- skupni seštevek ni bil sestavljen: " + (e2 && e2.message) + " ---\n"; }
 }
+/* ---------- pozicije po kovancih (pomnilnik + arhiv IndexedDB); izriše se samo, ko je razdelek odprt ---------- */
+var BCOIN = {per: "all", v: "", sort: "eur", q: "", lim: 40, open: {}, plim: {}};
+function bcKey(p){ return p.addr ? String(p.addr).toLowerCase() : "s:" + String(p.label || p.sym || "?").toUpperCase(); }
+function bcCalc(){
+  var from = botPerFrom(BCOIN.per), q = BCOIN.q.trim().toUpperCase(), G = {};
+  botAllList().forEach(function(p){
+    if (!p || p.t < from || botExc(p) || (BCOIN.v && p.v !== BCOIN.v)) return;
+    if (q && String(p.label || p.sym || "").toUpperCase().indexOf(q) < 0) return;
+    var k = bcKey(p), g = G[k] || (G[k] = {k: k, label: p.label || p.sym, addr: p.addr || "", cl: [], op: [], vs: {}, last: 0});
+    if (p.st === "open") g.op.push(p); else if (typeof p.net === "number" && isFinite(p.net)) g.cl.push(p); else return;
+    g.vs[p.v] = (g.vs[p.v] || 0) + 1; if (p.t > g.last) g.last = p.t;
+  });
+  var L = Object.keys(G).map(function(k){
+    var g = G[k], a = botAgg(g.cl), nets = g.cl.map(function(p){ return p.net; });
+    g.n = a.n; g.eur = a.eur; g.avg = a.avg; g.win = a.win; g.best = nets.length ? Math.max.apply(null, nets) : null; g.worst = nets.length ? Math.min.apply(null, nets) : null;
+    g.opEur = g.op.reduce(function(s, p){ try { return s + botTot(p, p.last).eur; } catch (e) { return s; } }, 0);
+    g.big = g.cl.filter(function(p){ return (p.peak / p.e - 1) * 100 >= 10; }).length;
+    return g;
+  });
+  var nm = {}; L.forEach(function(g){ var u = String(g.label).toUpperCase(); nm[u] = (nm[u] || 0) + 1; });
+  L.forEach(function(g){ g.dup = nm[String(g.label).toUpperCase()] > 1; });
+  var S = {eur: function(a, b){ return b.eur - a.eur; }, eurU: function(a, b){ return a.eur - b.eur; }, n: function(a, b){ return (b.n + b.op.length) - (a.n + a.op.length); }, avg: function(a, b){ return (b.avg == null ? -1e9 : b.avg) - (a.avg == null ? -1e9 : a.avg); }, last: function(a, b){ return b.last - a.last; }, name: function(a, b){ return String(a.label).localeCompare(String(b.label)); }};
+  L.sort(S[BCOIN.sort] || S.eur);
+  return L;
+}
+function bcRows(g){
+  var all = g.op.concat(g.cl).sort(function(a, b){ return b.t - a.t; }), lim = BCOIN.plim[g.k] || 30;
+  var h = scTbl(["Vstop", "Raz.", "Neto", "Vrh", "Izstop", "Trajanje", "Sprožilec"], all.slice(0, lim).map(function(p){
+    var op = p.st === "open";
+    return [esc(fdt(p.t)) + (p.re > 0 ? " <small>(#" + p.re + ")</small>" : ""), p.v, op ? '<small>odprta</small> ' + cv((p.last / p.e - 1) * 100) : cv(p.net), cv((p.peak / p.e - 1) * 100), esc(op ? "–" : (p.why || "")), esc(durTxt((op ? Date.now() : p.t1) - p.t)), '<small>' + esc(String(p.ctx || (p.en && p.en.why) || "").slice(0, 90)) + '</small>'];
+  }));
+  if (all.length > lim) h += '<div class="row" style="margin:6px 0"><button class="ghost small" data-bcmore="' + esc(g.k) + '">Pokaži še (' + (all.length - lim) + ')</button></div>';
+  return h;
+}
+function botCoinDraw(){
+  var d = $("botcoin"); if (!d) return;
+  if (!d.open) { $("botcoinsum").textContent = "Po kovancih (z arhivom)" + (ARCL ? "" : " · arhiv se nalaga"); return; }
+  var L = bcCalc(), tn = L.reduce(function(s, g){ return s + g.n; }, 0), te = L.reduce(function(s, g){ return s + g.eur; }, 0);
+  $("botcoinsum").textContent = "Po kovancih (z arhivom) · " + L.length + " kov. · " + tn + " poz. · " + bEt(te);
+  var s = '<div class="cap">' + L.length + ' kovancev · ' + tn + ' zaprtih pozicij · ' + bEv(te) + ' · v pomnilniku ' + BST.length + ', v arhivu ' + (ARCL ? ARCL.length : "nalagam…") + '. Klik na kovanec pokaže njegove pozicije. Isto ime z različnim naslovom je ločeno (pripisan začetek naslova).</div>';
+  if (!L.length) { $("botcoinout").innerHTML = s + '<div class="loading">Ni pozicij za izbrane filtre.</div>'; return; }
+  s += '<table class="pairs"><thead><tr><th>Kovanec</th><th>Poz.</th><th>Neto €</th><th>Povpr.</th><th>Zmage</th><th>Vrh&gt;10 %</th><th>Najb. / najsl.</th><th>Različice</th><th>Zadnji vstop</th></tr></thead><tbody>';
+  L.slice(0, BCOIN.lim).forEach(function(g){
+    var o = !!BCOIN.open[g.k], vs = Object.keys(g.vs).sort().map(function(v){ return v + g.vs[v]; }).join(" ");
+    s += '<tr data-bck="' + esc(g.k) + '" style="cursor:pointer"><td><b>' + (o ? "▾ " : "▸ ") + esc(g.label) + '</b>' + (g.dup && g.addr ? ' <small>' + esc(g.addr.slice(0, 6)) + '…</small>' : "") + '</td><td>' + g.n + (g.op.length ? ' <small>+' + g.op.length + ' odpr.</small>' : "") + '</td><td>' + (g.n ? bEv(g.eur) : "–") + (g.op.length ? '<br><small>odpr. ' + esc(bEt(g.opEur)) + '</small>' : "") + '</td><td>' + cv(g.avg) + '</td><td>' + esc(bPc(g.win)) + '</td><td>' + g.big + '</td><td>' + (g.n ? cv(g.best) + " / " + cv(g.worst) : "–") + '</td><td><small>' + esc(vs) + '</small></td><td><small>' + esc(fdt(g.last)) + '</small></td></tr>';
+    if (o) s += '<tr><td colspan="9" style="padding:4px 0 10px 12px">' + bcRows(g) + '</td></tr>';
+  });
+  s += '</tbody></table>';
+  if (L.length > BCOIN.lim) s += '<div class="row" style="margin-top:8px"><button class="ghost small" id="bcmore">Pokaži še kovance (' + (L.length - BCOIN.lim) + ')</button><button class="ghost small" id="bcallc">Pokaži vse</button></div>';
+  $("botcoinout").innerHTML = s;
+}
+(function(){
+  var d = $("botcoin"); if (!d) return;
+  $("bcper").innerHTML = BPER.map(function(x){ return '<option value="' + x[0] + '"' + (x[0] === BCOIN.per ? " selected" : "") + '>' + esc(x[1]) + '</option>'; }).join("");
+  $("bcper").addEventListener("change", function(){ BCOIN.per = this.value; BCOIN.lim = 40; botCoinDraw(); });
+  $("bcvar").addEventListener("change", function(){ BCOIN.v = this.value; BCOIN.lim = 40; botCoinDraw(); });
+  $("bcsort").addEventListener("change", function(){ BCOIN.sort = this.value; botCoinDraw(); });
+  var qt = null; $("bcq").addEventListener("input", function(){ var v = this.value; clearTimeout(qt); qt = setTimeout(function(){ BCOIN.q = v; BCOIN.lim = 40; botCoinDraw(); }, 300); });
+  d.addEventListener("toggle", function(){ if (d.open) botAllRefresh(); botCoinDraw(); });
+  $("botcoinout").addEventListener("click", function(e){
+    var b = e.target.closest("button");
+    if (b && b.id === "bcmore") { BCOIN.lim += 40; botCoinDraw(); return; }
+    if (b && b.id === "bcallc") { BCOIN.lim = 100000; botCoinDraw(); return; }
+    if (b && b.getAttribute("data-bcmore")) { var k0 = b.getAttribute("data-bcmore"); BCOIN.plim[k0] = (BCOIN.plim[k0] || 30) + 50; botCoinDraw(); return; }
+    var tr = e.target.closest("tr[data-bck]"); if (!tr) return;
+    var k = tr.getAttribute("data-bck"); BCOIN.open[k] = !BCOIN.open[k]; botCoinDraw();
+  });
+})();
 function botAllDraw(){
   var d = $("botall"); if (!d) return;
   var c = botAllCalc(BALL.per, BALL.nomax);
   $("botallsum").textContent = "Skupni seštevek · " + c.tot.n + " poz. · " + bEt(c.tot.eur) + (c.tot.avg == null ? "" : " · " + sgn(c.tot.avg));
   if (d.open) $("botallout").innerHTML = botAllHtml(c);
+  try { botCoinDraw(); } catch (eC) {}
 }
 function botAllRefresh(){
   if ((ARCL === null || ARCN !== BARN) && !ARCB) {
